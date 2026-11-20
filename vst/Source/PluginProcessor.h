@@ -81,6 +81,13 @@ public:
     std::array<std::atomic<float>, eightball::kNumLfos> statLfo {};   // LFO outputs, -1..1
     std::atomic<float> statGr { 0.0f };               // compressor gain reduction, dB (max since the editor read it)
 
+    // Per-operator scopes for the animated matrix: 128 points each, written by the audio thread under a
+    // sequence counter (odd while writing); the editor copies them when the counter is even and unchanged.
+    static constexpr int kScopePoints = 128;
+    std::atomic<bool> wantScopes { false };           // the UI's Animate toggle
+    std::array<float, eightball::kNumOps * kScopePoints> scopeBuf {};
+    std::atomic<uint32_t> scopeSeq { 0 };
+
 private:
     void setPresetInfo (const juce::String& id, const juce::String& name, const juce::String& category);
     void handleMidi (const juce::MidiMessage&);

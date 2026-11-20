@@ -87,6 +87,21 @@
           "op2Amp": { "points": [[0, 0], [1.5, 1, 0.3], [2.0, 0.7, -0.2], [3.0, 0, -0.4]], "sustain": 2 },
           "op3Amp": { "points": [[0, 0], [1.0, 1, 0.2], [1.5, 0.9, -0.2], [3.0, 0, -0.4]], "sustain": 2 },
           "op4Amp": { "points": [[0, 0], [2.0, 1, 0.3], [2.5, 0.6, -0.2], [3.0, 0, -0.4]], "sustain": 2 }
+        } },
+      { "name": "Harmonic Pad",
+        "params": { "op1Wave": 6, "op1Level": 0.7, "op1Unison": 3, "op1Detune": 9, "op1Spread": 0.9, "op2Wave": 6, "op2Ratio": 0.5, "op2Level": 0.5, "op2Unison": 2, "op2Detune": 6,
+                    "out1Dry": 0, "out1F1": 0.8, "out2Dry": 0, "out2F1": 0.7, "flt1Cutoff": 900, "flt1Reso": 0.15, "flt1EnvAmt": 0.5, "flt1KeyTrack": 0.5,
+                    "lfo1On": 1, "lfo1Rate": 0.12, "lfo1Depth": 1, "mod1Src": 1, "mod1Amt": 0.18,
+                    "choOn": 1, "choRate": 0.3, "choDepth": 0.35, "choMix": 0.3, "revOn": 1, "revSize": 0.9, "revDecay": 0.75, "revMix": 0.3 },
+        "modDst": { "mod1Dst": "flt1Cutoff" },
+        "waves": {
+          "1": { "mode": "harmonic", "levels": [1, 0.35, 0.7, 0.15, 0.5, 0, 0.3, 0, 0.22, 0, 0, 0.12, 0, 0, 0, 0.08], "phases": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] },
+          "2": { "mode": "harmonic", "levels": [1, 0, 0.5, 0, 0.3], "phases": [0, 0, 0.25, 0, 0.5] }
+        },
+        "envs": {
+          "op1Amp": { "points": [[0, 0], [1.2, 1, 0.3], [2.0, 0.85, -0.2], [3.5, 0, -0.4]], "sustain": 2 },
+          "op2Amp": { "points": [[0, 0], [2.0, 1, 0.3], [2.5, 0.7, -0.2], [3.5, 0, -0.4]], "sustain": 2 },
+          "flt1Cutoff": { "points": [[0, 0], [2.5, 1, 0.2], [5.0, 0.5, -0.3], [6.0, 0, -0.5]], "sustain": 2 }
         } }
     ] },
     { "name": "Brass & Plucks", "presets": [

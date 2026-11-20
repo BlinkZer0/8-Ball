@@ -10,9 +10,9 @@
 //                      loadPreset{id}, savePreset{name,overwrite}, deletePreset{id}, initPreset,
 //                      loadPresetFile, openPresetFolder, paramMenu{id,x,y},
 //                      midiLearn{id}, midiForget{id}, learnCancel,
-//                      setWave{op,wave}, setEnv{key,env}, setLfoShape{lfo,shape}
+//                      setWave{op,wave}, setEnv{key,env}, setLfoShape{lfo,shape}, setAnimate{on}
 //   C++ -> UI events : params{id:value...}, notes{on[],off[]},
-//                      stats{voices,peak,sustain,modWheel,bpm,ops[8],active,lfo[4],gr}, config{...},
+//                      stats{voices,peak,sustain,modWheel,bpm,ops[8],active,lfo[4],gr}, scope{ops[8][128]}, config{...},
 //                      presetList{presets[],folder}, preset{id,name,category},
 //                      saveResult{ok,exists,name,error}, message{text},
 //                      model{waves,envs,lfoShapes}, learn{armed,map{id:cc}}
@@ -40,6 +40,7 @@ private:
     void sendModel();
     void sendLearn();
     void sendMessage (const juce::String& text);
+    void sendScopes();
     void chooseAndLoadPresetFile();
     void showParamMenu (const juce::var&);
 

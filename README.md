@@ -1,4 +1,4 @@
-# Eight Ball: v0.3 (milestone 3 of 6)
+# Eight Ball: v0.4 (milestone 4 of 6)
 
 Eight Ball is an 8-operator FM synthesizer: harmonic-editor wavetable operators, an 8×8 phase-modulation grid
 plus an 8×8 ring-modulation grid, three multimode filters, freeform envelopes, four LFOs, a mod matrix, an FX
@@ -9,7 +9,7 @@ same way.
 
 | Build | Where | Status |
 |---|---|---|
-| **VST3 plugin** + Standalone | [`vst/`](vst/README.md) | milestone 3: the DSP core, the 8 operators, the matrix, the three filters, the envelope editor, 4 LFOs, the 16-slot mod matrix, the 7-unit FX chain, the plugin, every page but the harmonic editor and the animated matrix, 12 starter presets; all automated checks pass |
+| **VST3 plugin** + Standalone | [`vst/`](vst/README.md) | milestone 4: the DSP core, the 8 operators with the harmonic / drawn wave editor, the animated matrix, the three filters, the envelope editor, 4 LFOs, the 16-slot mod matrix, the 7-unit FX chain, the plugin, the full UI, 13 starter presets; all automated checks pass |
 | **Web build** | `web/index.html` | milestone 6 |
 
 The plan, the milestones and the measured results are in [docs/PLAN.md](docs/PLAN.md). The house rules are in
@@ -25,19 +25,22 @@ The plan, the milestones and the measured results are in [docs/PLAN.md](docs/PLA
 |---|---|
 | ![Filters page](vst/tests/screenshots/ui-filters.png) | ![Articulators page](vst/tests/screenshots/ui-art.png) |
 
-| FX | |
+| FX | WAVE EDITOR (on the OPERATORS page) |
 |---|---|
-| ![FX page](vst/tests/screenshots/ui-fx.png) | |
+| ![FX page](vst/tests/screenshots/ui-fx.png) | ![Wave editor](vst/tests/screenshots/ui-wave.png) |
 
 (made by `vst\tests\run-ui-tests.ps1` from the real UI with a stand-in bridge)
 
-## What it does so far (milestones 1 to 3)
+## What it does so far (milestones 1 to 4)
 
 **The 8 operators**
-- Each operator plays a **band-limited, mipmapped wavetable** baked from a set of partials (level and phase each,
-  up to 128) or a drawn cycle, so high notes don't alias. Starter shapes: sine, saw, square, triangle, half-sine,
-  noise. The harmonic editor and drawn-shape mode arrive with the full UI (milestone 4); the engine, the preset
-  format and the Custom wave already carry them.
+- Each operator plays a **band-limited, mipmapped wavetable** baked from a set of partials (level and phase each)
+  or a drawn cycle, so high notes don't alias. Starter shapes: sine, saw, square, triangle, half-sine, noise.
+- **Click an operator's wave screen to open the wave editor**: **HARMONIC** mode shows 64 partials as level bars
+  and phase bars (drag across them to paint, double-click a bar to reset it); **DRAWN** mode is a 256-point cycle
+  you draw by hand. Switching modes converts the wave either way (a harmonic sum, or a DFT of the drawing).
+  Starters (sine, saw, square, triangle, half-sine, organ), CLEAR, RANDOM, NORMALIZE, a live preview of the cycle.
+  Editing sets the operator's wave to Custom; the plugin bakes the new table in about 2 ms while you drag.
 - **Ratio** 0.5–32 in half steps, **fine** ±100 cents, **fixed** frequency mode (Hz), **key tracking** 0–200%.
 - **Level**, **pan**, **velocity** sensitivity.
 - **Unison** 1–8 sub-oscillators with **detune** and stereo **spread** (constant-power sum).
@@ -54,6 +57,11 @@ The plan, the milestones and the measured results are in [docs/PLAN.md](docs/PLA
 - A separate **8×8 ring-modulation grid** that works the same way.
 - An **output column** that sends each operator to Filter 1, Filter 2, Filter 3 and/or Dry, each with its own level.
 - Drag a cell up or down, Ctrl or Shift for fine control, double-click to reset.
+- **The animated matrix** (ANIMATE toggle): cells, row and column numbers glow with the modulator's output, a
+  **signal-flow diagram** draws the operators on a ring with an edge per PM cell (solid), ring cell (dashed) and
+  self-feedback loop, carriers linked to the output with their bus names, lines flowing while a signal passes, and
+  **eight operator scopes** show the live waveform of each operator (all voices summed). Off, the plugin stops
+  sending scope data.
 - **Algorithm layouts** fill the grid: single carrier, stacks of 2 / 3 / 4, a fan, parallel pairs, two 4-op stacks,
   stack + pair, three stacks, feedback chains, a shared modulator, all carriers (additive). Plus **Clear** and
   **Randomize** with an amount knob.
@@ -108,9 +116,10 @@ The plan, the milestones and the measured results are in [docs/PLAN.md](docs/PLA
 - Hover any control for a tooltip with its name and value.
 
 **Presets**
-- 12 starter presets (Init plus one or two per category: E-Pianos & Bells, Basses, Leads, Pads, Brass & Plucks,
+- 13 starter presets (Init plus one or two per category: E-Pianos & Bells, Basses, Leads, Pads, Brass & Plucks,
   Organs & Keys, Evolving & Textures, FX & Percussion; Wobble Bass and Vibrato Lead use the LFOs and the mod
-  matrix, Soft FM Pad and Pluck use the FX). The 64 level-matched factory presets come in milestone 5.
+  matrix, Soft FM Pad and Pluck use the FX, Harmonic Pad uses custom harmonic waves). The 64 level-matched factory
+  presets come in milestone 5.
 - A category browser (PRESETS page), ‹ › arrows, INIT, SAVE (replaces the current user preset), SAVE AS, LOAD,
   FOLDER; `*` after the name when you've changed something.
 - `.ebpreset` files (plain JSON: every parameter plus the waves, envelopes and LFO shapes) in
@@ -157,11 +166,12 @@ oversampling; LFOs + mod matrix: rate, sync, delay, every shape, bypass of the L
 depth, per-voice sources, global destinations, clicks; the FX chain: every unit's bypass and mix 0 bit-identical,
 what each unit does, delay timing and sync, reverb tail and decay, EQ bands, compression and the limiter ceiling,
 the order, click-free switching; every factory preset through a full note), `check-params.ps1` (491 parameters
-match between C++ and JS), `run-ui-tests.ps1` (56 UI checks per page), `--host-check` (the built VST3 loaded like a
-DAW: parameters, sound, automation, state round trip).
+match between C++ and JS), `run-ui-tests.ps1` (67 UI checks per page, including the wave editor and the matrix
+animation), `--host-check` (the built VST3 loaded like a DAW: parameters, sound, automation, state round trip).
 
 **Still to confirm by hand:** everything in Minihost Modular and FL Studio: sound, the UI, MIDI learn, the
-right-click host menu, project save / reopen, the envelope editor, the LFOs and the FX by ear.
+right-click host menu, project save / reopen, the envelope and wave editors, the LFOs, the FX and the animated
+matrix by eye and ear.
 
 ## Dev workflow
 

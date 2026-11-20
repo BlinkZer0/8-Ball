@@ -488,14 +488,40 @@
       for (const key in m.envs) if (lastLocal[`env:${key}`] !== undefined && now - lastLocal[`env:${key}`] < 300) m.envs[key] = model.envs[key];
     if (model && model.lfoShapes && m.lfoShapes)
       for (const l in m.lfoShapes) if (lastLocal[`lfo:${l}`] !== undefined && now - lastLocal[`lfo:${l}`] < 300) m.lfoShapes[l] = model.lfoShapes[l];
+    if (model && model.waves && m.waves)
+      for (const k in m.waves) if (lastLocal[`wave:${k}`] !== undefined && now - lastLocal[`wave:${k}`] < 300) m.waves[k] = model.waves[k];
     model = m;
+    if (waveEditor.isOpen) waveEditor.open(waveEditor.k);
     for (const u of opUi) refreshAdsrKnobs(`op${u.k + 1}Amp`);
     refreshOps();
     art.setModel(model);
   });
 
   // =================================================================== MATRIX =
-  const matrix = new MatrixPage($('#matrix-page'), { values, addKnob, setParams, log: logMidi });
+  const matrix = new MatrixPage($('#matrix-page'), { values, addKnob, setParams, log: logMidi, store, setAnimate: (on) => engine.setAnimate(on) });
+  refreshers.push((ids) => matrix.refresh(ids));
+  engine.on('scope', ({ ops }) => matrix.drawScopes(ops));
+
+  // ============================================================ WAVE EDITOR =
+  const waveEditor = new WaveEditor($('.page[data-page="ops"]'), {
+    values, log: logMidi,
+    getModel: () => model,
+    setParam,
+    setWave: (k, spec) => {
+      if (!model) model = { waves: {}, envs: {}, lfoShapes: {} };
+      if (!model.waves) model.waves = {};
+      model.waves[String(k + 1)] = spec;
+      lastLocal[`wave:${k + 1}`] = performance.now();
+      engine.setWave(k, spec);
+      if (!presetDirty) { presetDirty = true; renderPresetName(); }
+      refreshOps(new Set([opParamId(k, 'Wave')]));
+    },
+  });
+  for (const u of opUi) {
+    u.scr.root.classList.add('clickable');
+    u.scr.root.dataset.tip = `Op ${u.k + 1}: click to edit the wave (harmonics or draw it)`;
+    u.scr.root.addEventListener('click', () => waveEditor.open(u.k));
+  }
 
   // ================================================================== FILTERS =
   function openEnv(key) { art.openEnv(key); showPage('art'); }
@@ -550,8 +576,8 @@
   const pageTabs = Array.from(document.querySelectorAll('.page-tab'));
   const pageEls = Array.from(document.querySelectorAll('.page'));
   const PAGE_HINTS = {
-    ops: 'Drag knobs up / down · Shift or Ctrl = fine · double-click = default · right-click = MIDI learn',
-    matrix: 'Row modulates column · diagonal = feedback · drag a cell up / down · double-click = clear it',
+    ops: 'Drag knobs · Shift or Ctrl = fine · double-click = default · right-click = MIDI learn · click a wave to edit it',
+    matrix: 'Row modulates column · diagonal = feedback · drag a cell · double-click = clear · ANIMATE shows the signal',
     filters: 'Three filters per voice · send operators to them on the MATRIX page · ENV opens the cutoff by up to 5 octaves',
     art: 'Drag points · drag a segment = curve · double-click = add / delete a point · right-click = sustain, loop · SYNC = beats',
     fx: 'Global, after the voices · drag a unit to reorder the chain · every ON is a true bypass · MIX blends dry and wet',
@@ -653,6 +679,7 @@
   engine.on('stats', ({ voices, peak, sustain, modWheel, bpm, ops, active, lfo, gr }) => {
     art.meters(lfo);
     fx.meter(gr);
+    matrix.animateStats(ops, active);
     $('#voice-count').textContent = `${voices}/${values.poly | 0}`;
     sustainLed.classList.toggle('on', !!sustain);
     if (typeof modWheel === 'number') wheel.setValue(modWheel);

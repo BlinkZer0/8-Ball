@@ -226,6 +226,14 @@ void EightBallProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::M
     for (int l = 0; l < kNumLfos; ++l) statLfo[(size_t) l].store ((float) engine.lfoValue (l));
     const float gr = (float) engine.takeGainReduction();
     if (gr > statGr.load()) statGr.store (gr);
+
+    if (wantScopes.load())
+    {
+        scopeSeq.fetch_add (1, std::memory_order_acq_rel);   // odd: writing
+        for (int k = 0; k < kNumOps; ++k)
+            engine.copyScope (k, scopeBuf.data() + k * kScopePoints, kScopePoints, SynthEngine::kScopeLen / kScopePoints);
+        scopeSeq.fetch_add (1, std::memory_order_acq_rel);   // even: done
+    }
 }
 
 //==============================================================================

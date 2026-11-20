@@ -95,6 +95,8 @@ juce::WebBrowserComponent::Options EightBallEditor::makeBrowserOptions()
             processor.requestPanic();
         })
         .withEventListener ("modWheel", [this] (const juce::var& e) { processor.setUiModWheel ((float) (double) e["value"]); })
+        // the matrix animation: the UI asks for the per-operator scopes only while it shows them
+        .withEventListener ("setAnimate", [this] (const juce::var& e) { processor.wantScopes = (bool) e["on"]; })
         .withEventListener ("loadPreset", [this] (const juce::var& e)
         {
             juce::String error;
@@ -225,6 +227,30 @@ void EightBallEditor::sendModel()
     auto* o = new juce::DynamicObject();
     modelDataToJson (processor.model.data(), *o);
     browser.emitEventIfBrowserIsVisible ("model", juce::var (o));
+}
+
+// A consistent copy of the scope buffer (retry while the audio thread is writing), only the active operators
+void EightBallEditor::sendScopes()
+{
+    std::array<float, kNumOps * EightBallProcessor::kScopePoints> buf {};
+    for (int attempt = 0; attempt < 4; ++attempt)
+    {
+        const uint32_t s0 = processor.scopeSeq.load (std::memory_order_acquire);
+        if (s0 & 1u) continue;
+        buf = processor.scopeBuf;
+        if (processor.scopeSeq.load (std::memory_order_acquire) == s0) break;
+    }
+    const int active = processor.statActiveMask.load();
+    juce::Array<juce::var> ops;
+    for (int k = 0; k < kNumOps; ++k)
+    {
+        juce::Array<juce::var> pts;
+        if ((active >> k) & 1)
+            for (int i = 0; i < EightBallProcessor::kScopePoints; ++i)
+                pts.add (std::round (buf[(size_t) (k * EightBallProcessor::kScopePoints + i)] * 1000.0f) / 1000.0);
+        ops.add (juce::var (pts));
+    }
+    browser.emitEventIfBrowserIsVisible ("scope", makeObject ({ { "ops", ops } }));
 }
 
 void EightBallEditor::sendMessage (const juce::String& text)
@@ -378,6 +404,10 @@ void EightBallEditor::timerCallback()
     // Autoload: pick up preset files added/removed/edited in the preset folder (every ~2 s)
     if (++ticks % 60 == 0 && processor.presetManager.rescanIfChanged())
         sendPresetList();
+
+    // the operator scopes (20 Hz, only while the UI animates them)
+    if (processor.wantScopes.load() && ticks % 3 == 0)
+        sendScopes();
 
     // Sounding notes (host MIDI + UI keyboard)
     juce::Array<juce::var> on, off;

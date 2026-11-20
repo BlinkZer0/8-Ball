@@ -126,7 +126,10 @@ Inherited: `ui/js/engine-juce.js` wraps `window.__JUCE__.backend` in a `JuceEngi
 - `initPreset` loads the factory Init patch.
 - `stats` carries `voices, peak, sustain, modWheel, bpm, ops[8] (mean |output| per operator), active (bit mask of
   operators doing something), lfo[4] (the LFO outputs), gr (compressor gain reduction in dB)` for the operator
-  activity bars, the LFO and gain-reduction meters and, in milestone 4, the animated matrix.
+  activity bars, the LFO and gain-reduction meters and the matrix animation (cell, header, node and edge glow).
+- `setAnimate {on}` (the matrix page's ANIMATE toggle) makes the plugin send `scope {ops[8][128]}` at 20 Hz: the
+  last 512 samples of every active operator's output (all voices summed, every 4th sample), copied from the audio
+  thread through a sequence-counter buffer. Off, nothing is sent.
 - **Right-click on a control opens the UI's own menu**: MIDI learn / Forget CC, Reset to default, and "Host automation
   menu…" which sends `paramMenu` (FL Studio's *Create automation clip*). The Ham used a LEARN mode button instead;
   the brief asks for right-click. Shift + right-click keeps the browser menu (DevTools).
@@ -134,7 +137,7 @@ Inherited: `ui/js/engine-juce.js` wraps `window.__JUCE__.backend` in a `JuceEngi
 ## 6. UI code
 
 - Plain ES, `'use strict'`, no framework, no build step. Scripts load in order:
-  `params.js, engine-juce.js, knob.js, controls.js, piano.js, matrix.js, envelope.js, filters.js, articulators.js, fx.js, app.js`.
+  `params.js, engine-juce.js, knob.js, controls.js, piano.js, matrix.js, envelope.js, waveeditor.js, filters.js, articulators.js, fx.js, app.js`.
 - All controls are SVG. `Knob` is the reference widget (drag, Shift or Ctrl for fine, wheel, arrows, double-click
   reset, gestures; sizes `md` and `sm`). Panels are built in `app.js` (`addKnob`, `control(Class, id)`) and every
   control carries `data-param`. Pages are tabs with an LED that shows whether the page's features are active.
@@ -148,9 +151,13 @@ Inherited: `ui/js/engine-juce.js` wraps `window.__JUCE__.backend` in a `JuceEngi
 - `Tooltip` (one floating element for every `[data-param]` / `[data-tip]`: name + value) and `ContextMenu`
   (the right-click menu) live in `controls.js`.
 - `MatrixPage` (`matrix.js`) draws the 8 x 8 PM grid, the 8 x 8 ring grid and the output column as grids of small
-  knobs and holds the algorithm layouts as plain data.
+  knobs and holds the algorithm layouts as plain data; below them the signal-flow diagram (rebuilt whenever a grid
+  or output parameter changes) and the eight scopes, animated from `stats` and `scope` while ANIMATE is on.
+- `WaveEditor` (`waveeditor.js`) is the operator wave editor overlay on the OPERATORS page (64 partials with level
+  and phase bars, or a 256-point drawn cycle through `ShapeEditor`); mode switches convert with the same maths as
+  `dsp/Wavetable.h` (`partialsFromShape`), sends are throttled to 30 Hz while painting.
 - `EnvEditor` and `ShapeEditor` (`envelope.js`) are the multi-point envelope editor and the draw-by-dragging shape
-  editor (LFO shapes now, operator shapes in milestone 4); the curve maths mirror `dsp/Envelope.h`. `FiltersPage`
+  editor (LFO shapes and operator shapes); the curve maths mirror `dsp/Envelope.h`. `FiltersPage`
   (`filters.js`) and `ArtPage` (`articulators.js`, envelopes + LFOs + mod matrix) build their pages from the same
   `addKnob` / `control` helpers. A parameter may have more than one knob (an envelope's amount knob appears on the
   OPERATORS and ARTICULATORS pages): `addKnob` registers the extra ones as bound controls.
@@ -195,7 +202,7 @@ parity test: the browser runs the same compiled code as the plugin.
 | `--render "<Category/Name>" out.wav [seconds] [note]` | renders a preset to a WAV, for listening without a DAW |
 | `--host-check "<path to .vst3>"` | loads the built VST3 like a DAW: scan, parameters, sound, automation, state round trip |
 | `tests\check-params.ps1` | params.js == ParamTable.h |
-| `tests\run-ui-tests.ps1 [-Page ops|matrix|filters|art|fx|presets]` | the plugin UI in headless Edge with a stand-in bridge: no script errors, controls for every parameter, drag / double-click / layouts / quick ADSR / keyboard / right-click menu / tooltip / preset browser, the filter panels and routing, the envelope editor (add / drag / sustain / shapes), LFO shapes, the mod matrix, the FX chain reorder, the EQ curve, the GR meter; also saves a screenshot |
+| `tests\run-ui-tests.ps1 [-Page ops|wave|matrix|filters|art|fx|presets]` | the plugin UI in headless Edge with a stand-in bridge: no script errors, controls for every parameter, drag / double-click / layouts / quick ADSR / keyboard / right-click menu / tooltip / preset browser, the filter panels and routing, the envelope editor (add / drag / sustain / shapes), LFO shapes, the mod matrix, the FX chain reorder, the EQ curve, the GR meter, the flow diagram, ANIMATE, cell glow and scopes from stats, the wave editor (open, paint a partial, Custom, drawn mode, conversion, close); also saves a screenshot (`wave` = the OPERATORS page with the editor open) |
 
 **Eight Ball:** every on/off switch has a bypass test that renders with the feature off and compares with the
 plain path: filter on/off (exactly equal to the dry render), filter mix 0, 2x oversampling off (identical to the

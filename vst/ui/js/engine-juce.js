@@ -13,7 +13,7 @@ class JuceEngine {
     this.handlers = {};
     if (this.backend) {
       for (const ev of ['params', 'notes', 'stats', 'config', 'presetList', 'preset', 'saveResult', 'message',
-                        'midiInputs', 'model', 'learn']) {
+                        'midiInputs', 'model', 'learn', 'scope']) {
         this.backend.addEventListener(ev, (data) => { if (this.handlers[ev]) this.handlers[ev](data); });
       }
     }
@@ -47,6 +47,8 @@ class JuceEngine {
   setWave(op, wave) { this.emit('setWave', { op, wave }); }
   setEnv(key, env) { this.emit('setEnv', { key, env }); }
   setLfoShape(lfo, shape) { this.emit('setLfoShape', { lfo, shape }); }
+  // the matrix animation wants the operator scopes (scope events) only while it is shown
+  setAnimate(on) { this.emit('setAnimate', { on: !!on }); }
 
   // web build only (the plugin takes tempo + MIDI from the host)
   setTempo(bpm) { this.emit('setTempo', { bpm }); }

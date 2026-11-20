@@ -914,6 +914,7 @@ private:
                 }
                 o.out = mono;
                 opActivity[(size_t) k] += std::abs (mono);
+                scopeAcc[(size_t) k][(size_t) i] += mono;
                 for (int j = 0; j < kNumOutputs; ++j) { busL[j] += L * ck.send[(size_t) j]; busR[j] += R * ck.send[(size_t) j]; }
             }
             for (int a = 0; a < numActive; ++a)
@@ -964,10 +965,29 @@ private:
     {
         std::fill (mixL.begin(), mixL.begin() + n, 0.0);
         std::fill (mixR.begin(), mixR.begin() + n, 0.0);
+        for (int k = 0; k < kNumOps; ++k) std::fill (scopeAcc[(size_t) k].begin(), scopeAcc[(size_t) k].begin() + n, 0.0);
         for (auto& v : voices)
             if (v.active()) renderVoice (v, n, rate);
         activitySamples += n;
+        // the per-operator scopes (sum over voices), at the base rate
+        const int step = rate > sr * 1.5 ? 2 : 1;
+        for (int i = 0; i < n; i += step)
+        {
+            for (int k = 0; k < kNumOps; ++k) scope[(size_t) k][(size_t) scopePos] = (float) scopeAcc[(size_t) k][(size_t) i];
+            scopePos = (scopePos + 1) % kScopeLen;
+        }
     }
+
+public:
+    static constexpr int kScopeLen = 512;
+    // The last `count` scope points of operator k, every `stride`-th sample, oldest first
+    void copyScope (int k, float* out, int count, int stride) const
+    {
+        int pos = scopePos - count * stride;
+        pos = ((pos % kScopeLen) + kScopeLen) % kScopeLen;
+        for (int i = 0; i < count; ++i) { out[i] = scope[(size_t) k][(size_t) pos]; pos = (pos + stride) % kScopeLen; }
+    }
+private:
 
     //==========================================================================
     std::array<Voice, kMaxVoices> voices;
@@ -1010,6 +1030,9 @@ private:
     bool sustainPedal = false;
     float peak = 0;
     std::array<double, kNumOps> opActivity {};
+    std::array<std::array<double, 2 * kChunk>, kNumOps> scopeAcc {};
+    std::array<std::array<float, kScopeLen>, kNumOps> scope {};
+    int scopePos = 0;
     int activitySamples = 0;
 };
 } // namespace eightball

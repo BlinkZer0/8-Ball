@@ -530,6 +530,27 @@ void qualityTests()
     // the safety clipper is linear below 0.8 and never exceeds 1
     CHECK (safetyClip (0.5) == 0.5 && safetyClip (-0.79) == -0.79 && safetyClip (5.0) <= 1.0 && safetyClip (-5.0) >= -1.0 && safetyClip (0.9) < 0.9);
 
+    // the operator scopes: op 1's scope holds the last 512 samples of its output (a 440 Hz sine here)
+    {
+        Patch q;
+        auto holder = std::make_unique<ModelHolder> (q.model);
+        auto eng = std::make_unique<SynthEngine>();
+        eng->setParamValues (q.v.data()); eng->prepare (kSr); eng->setModel (&holder->model); eng->settleParams();
+        std::array<float, 4800> L {}, R {};
+        eng->noteOn (69, 100);
+        eng->render (L.data(), R.data(), 4800);
+        std::vector<float> sc (512);
+        eng->copyScope (0, sc.data(), 512, 1);
+        CHECKF (std::abs (zeroCrossFreq (sc, 0, 512) - 440.0) < 10, "scope %g Hz", zeroCrossFreq (sc, 0, 512));
+        CHECK (rms (sc, 0, 512) > 0.3);                 // the operator's own level, before the voice gain
+        std::vector<float> sc2 (512);
+        eng->copyScope (1, sc2.data(), 512, 1);
+        CHECK (rms (sc2, 0, 512) == 0.0);               // op 2 is silent
+        std::vector<float> sc4 (128);
+        eng->copyScope (0, sc4.data(), 128, 4);
+        CHECK (sc4[0] == sc[0] && sc4[127] == sc[508]);  // every 4th sample over the same span, oldest first
+    }
+
     // model handoff: a new table reaches the audio thread, the old one is retired and freed
     auto storePtr = std::make_unique<ModelStore>();
     auto& store = *storePtr;

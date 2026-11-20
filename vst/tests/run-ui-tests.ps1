@@ -2,7 +2,8 @@
 #  Runs the plugin UI (vst/ui) in headless Edge with a stand-in bridge
 #  (tests/ui-tests.js) and reports the checks it makes. Also saves a
 #  screenshot of the UI to vst/tests/screenshots/ui.png.
-#  Usage: powershell -ExecutionPolicy Bypass -File run-ui-tests.ps1 [-Page ops|matrix|filters|art|fx|presets]
+#  Usage: powershell -ExecutionPolicy Bypass -File run-ui-tests.ps1 [-Page ops|wave|matrix|filters|art|fx|presets]
+#  (-Page wave = the OPERATORS page with the wave editor open)
 # ============================================================================
 param([string]$Page = 'ops')
 $ErrorActionPreference = 'Stop'
@@ -25,7 +26,7 @@ $html = [regex]::Replace($html, '<script src="js/([\w.-]+)"></script>', {
     return $code
 })
 $html = $html.Replace('<footer class="statusbar">', "<script>window.__uiTestPage = '$Page';</script><pre id=`"ui-test-out`" style=`"display:none`"></pre><footer class=`"statusbar`">")
-$html = $html.Replace("store.get('eightball.page') || 'ops'", "'$Page'")
+$html = $html.Replace("store.get('eightball.page') || 'ops'", "'$(if ($Page -eq 'wave') { 'ops' } else { $Page })'")
 
 $tmp = Join-Path $env:TEMP 'eightball-ui-tests'
 New-Item -ItemType Directory -Force $tmp | Out-Null

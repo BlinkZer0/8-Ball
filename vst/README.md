@@ -128,7 +128,7 @@ freed on the audio thread.
 
 - **Factory:** [presets/factory_presets.json](presets/factory_presets.json), templates + per-preset overrides;
   model blocks merge the same way; `"modDst": { "mod1Dst": "flt1Cutoff" }` names a mod slot's destination by
-  parameter id. Milestones 1–2 ship Init plus 11 starters.
+  parameter id. Milestones 1–4 ship Init plus 12 starters.
 - **User folder:** `Documents\Eight Ball\Presets`, shared by every DAW and every instance; scanned on open and
   every 2 seconds; subfolders become category tabs; **SAVE** replaces the current user preset, **SAVE AS** asks for
   a name and before replacing a file; the **×** on a user preset moves it to the Recycle Bin.
@@ -148,7 +148,7 @@ Build with `build.bat`, then run from `%LOCALAPPDATA%\EightBallVST\build\EightBa
 | `--loudness` | loudness of every factory preset (level matching, milestone 5) |
 | `--render "<Category/Name>" out.wav [seconds] [note]` | a preset to a WAV |
 | `--host-check "<path>\Eight Ball.vst3"` | loads the built VST3 like a DAW: scan, every parameter with a name and text, sound, automation during playback, state round trip into a fresh instance |
-| `tests\run-ui-tests.ps1 [-Page ops\|matrix\|filters\|art\|fx\|presets]` | the UI in headless Edge with a stand-in bridge (56 checks: a control for every parameter, drags, the quick ADSR, the keyboard, the menu, tooltips, the browser, the filter panels and routing, the envelope editor, LFO shapes, the mod matrix, the FX chain drag-reorder, the EQ curve, the gain-reduction meter) + a screenshot in `tests/screenshots/` |
+| `tests\run-ui-tests.ps1 [-Page ops\|wave\|matrix\|filters\|art\|fx\|presets]` | the UI in headless Edge with a stand-in bridge (67 checks: a control for every parameter, drags, the quick ADSR, the keyboard, the menu, tooltips, the browser, the filter panels and routing, the envelope editor, LFO shapes, the mod matrix, the FX chain drag-reorder, the EQ curve, the gain-reduction meter, the flow diagram, ANIMATE, cell glow and scopes, the wave editor) + a screenshot in `tests/screenshots/` |
 
 ## Layout
 
@@ -172,9 +172,10 @@ ui/                          the UI (HTML/CSS/SVG/JS), embedded in the binary
   js/params.js               the parameter table (mirror)
   js/engine-juce.js          the bridge
   js/knob.js, controls.js    SVG knob; toggle, segmented, dropdown, mod wheel, tooltip, context menu
-  js/piano.js, matrix.js     keyboard; the matrix page
+  js/piano.js, matrix.js     keyboard; the matrix page (grids, layouts, the flow diagram, the scopes)
   js/envelope.js             the multi-point envelope editor, the drawn-shape editor
   js/filters.js              the filters page (response curves, routing diagram)
+  js/waveeditor.js           the operator wave editor (64 partials + phases, or a drawn cycle)
   js/articulators.js         the articulators page: envelope targets + toolbar, the LFOs, the mod matrix
   js/fx.js                   the FX page: the chain bar (drag to reorder), one panel per unit, the EQ curve
   js/app.js                  UI wiring
@@ -192,6 +193,7 @@ tests/                       PresetTests.cpp (main), EngineTests.cpp, EngineTool
 | `loadPreset {id}`, `initPreset`, `savePreset {name,overwrite}`, `deletePreset {id}`, `loadPresetFile`, `openPresetFolder` | `presetList {presets,folder}`, `preset {id,name,category}`, `saveResult {ok,exists,name,error}`, `message {text}` |
 | `paramMenu {id,x,y}`, `midiLearn {id}`, `midiForget {id}`, `learnCancel` | `learn {armed, map{id:cc}}` |
 | `setWave {op,wave}`, `setEnv {key,env}`, `setLfoShape {lfo,shape}` | `model {waves,envs,lfoShapes}` |
+| `setAnimate {on}` | `scope {ops[8][128]}` (20 Hz while on: each active operator's last 512 output samples, every 4th) |
 | *web only:* `setTempo {bpm}`, `selectMidi {id}` | `stats {voices,peak,sustain,modWheel,bpm,ops[8],active,lfo[4],gr}`, `config {…}`, *web only:* `midiInputs` |
 
 ## Troubleshooting

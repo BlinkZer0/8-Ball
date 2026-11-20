@@ -2,8 +2,10 @@
 //  The matrix page: the 8x8 PM grid, the 8x8 ring-mod grid and the output
 //  column, as grids of small knobs (drag up/down, Ctrl or Shift = fine,
 //  double-click = reset), plus the algorithm layouts, Clear and Randomize.
-//  Milestone 4 adds the animation (glowing cells, per-operator scopes,
-//  signal-flow lines) on top of this.
+//  Below the grids: the signal-flow diagram (nodes on a ring, an edge per
+//  cell, carriers to the output) and eight operator scopes. With ANIMATE on,
+//  cells, headers, nodes and edges glow with each operator's output and the
+//  scopes show the live waveforms the plugin sends.
 //
 //  Layouts are plain data: { name, pm: [[src, dst, depth]...], carriers: [op...] }
 //  (1-based operator numbers). Applying one clears both grids and the output
@@ -27,7 +29,7 @@ const MATRIX_LAYOUTS = [
 ];
 
 class MatrixPage {
-  // host: { values, addKnob(parent, id, opts), setParams(obj), log(text) }
+  // host: { values, addKnob(parent, id, opts), setParams(obj), log(text), store, setAnimate(on) }
   constructor(container, host) {
     this.host = host;
     this.container = container;
@@ -126,6 +128,152 @@ class MatrixPage {
     tools.appendChild(actions);
     row.appendChild(tools);
     this.container.appendChild(row);
+
+    // ---- second row: the signal-flow diagram and the operator scopes (the animation)
+    const row2 = document.createElement('div');
+    row2.className = 'mx-row';
+    const flow = document.createElement('div');
+    flow.className = 'panel mx-panel flow';
+    flow.innerHTML = '<div class="panel-head"><span class="panel-title">SIGNAL FLOW</span><span class="mx-hint">PM solid · ring dashed · carriers to the output</span></div>';
+    this.flowSvg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    this.flowSvg.setAttribute('viewBox', '0 0 300 170');
+    this.flowSvg.setAttribute('class', 'flow-svg');
+    flow.appendChild(this.flowSvg);
+    row2.appendChild(flow);
+
+    const scopes = document.createElement('div');
+    scopes.className = 'panel mx-panel scopes';
+    const sh = document.createElement('div');
+    sh.className = 'panel-head';
+    sh.innerHTML = '<span class="panel-title">OPERATOR SCOPES</span><span class="mx-hint">each operator\'s output, all voices summed · cells and lines glow with the signal</span>';
+    this.animate = (this.host.store && this.host.store.get('eightball.animate')) !== '0';
+    this.animateBtn = new ToggleButton({ name: 'Animate' }, this.animate ? 1 : 0, (v) => this.setAnimate(v >= 0.5), 'ANIMATE');
+    this.animateBtn.el.dataset.tip = 'Live scopes, glowing cells and flow lines (off saves a little CPU in the UI)';
+    sh.appendChild(this.animateBtn.el);
+    scopes.appendChild(sh);
+    const grid = document.createElement('div');
+    grid.className = 'scope-grid';
+    this.scopeUi = [];
+    for (let k = 0; k < NUM_OPS; k++) {
+      const s = document.createElement('div');
+      s.className = 'screen op-scope';
+      s.innerHTML = `<svg viewBox="0 0 120 44" preserveAspectRatio="none"><path class="scr-grid" d="M0 22 H120"/><path class="scr-line" d="M0 22 H120"/></svg><span class="scope-num">${k + 1}</span>`;
+      grid.appendChild(s);
+      this.scopeUi.push({ el: s, path: s.querySelector('.scr-line') });
+    }
+    scopes.appendChild(grid);
+    row2.appendChild(scopes);
+    this.container.appendChild(row2);
+    this.drawFlow();
+    this.setAnimate(this.animate, true);
+  }
+
+  setAnimate(on, initial) {
+    this.animate = on;
+    this.animateBtn.setValue(on ? 1 : 0);
+    this.container.classList.toggle('animating', on);
+    if (this.host.store) this.host.store.set('eightball.animate', on ? '1' : '0');
+    if (this.host.setAnimate) this.host.setAnimate(on);
+    if (!on) {
+      for (const id in this.cells) this.cells[id].el.parentNode.style.removeProperty('--glow');
+      this.container.querySelectorAll('.mx-head-cell').forEach(c => c.style.removeProperty('--glow'));
+      this.flowSvg.querySelectorAll('[data-src]').forEach(e => e.style.removeProperty('--glow'));
+      for (const s of this.scopeUi) s.path.setAttribute('d', 'M0 22 H120');
+    }
+    void initial;
+  }
+
+  // the graph: 8 operator nodes on a ring, the output in the centre; an edge per PM / ring cell, self loops for feedback
+  drawFlow() {
+    const v = this.host.values;
+    const cx = 150, cy = 85, R = 66;
+    const pos = (k) => { const a = -Math.PI / 2 + k * 2 * Math.PI / NUM_OPS; return [cx + R * Math.cos(a), cy + R * Math.sin(a)]; };
+    let edges = '', nodes = '';
+    const edge = (s, d, depth, cls) => {
+      const [x1, y1] = pos(s), [x2, y2] = pos(d);
+      // curve bowing to the side so the s->d and d->s edges don't overlap
+      const mx = (x1 + x2) / 2, my = (y1 + y2) / 2, dx = x2 - x1, dy = y2 - y1, len = Math.hypot(dx, dy) || 1;
+      const bow = 14, qx = mx + (-dy / len) * bow, qy = my + (dx / len) * bow;
+      const w = 0.8 + 2.4 * depth;
+      edges += `<path class="flow-edge ${cls}" data-src="${s}" d="M${x1.toFixed(1)} ${y1.toFixed(1)} Q${qx.toFixed(1)} ${qy.toFixed(1)} ${x2.toFixed(1)} ${y2.toFixed(1)}" stroke-width="${w.toFixed(2)}" marker-end="url(#flowArrow)"/>`;
+    };
+    for (let s = 0; s < NUM_OPS; s++)
+      for (let d = 0; d < NUM_OPS; d++) {
+        const pm = v[pmId(s, d)], rm = v[rmId(s, d)];
+        if (s === d) {
+          if (pm > 0 || rm > 0) {
+            const [x, y] = pos(s);
+            const ax = x + (x - cx) / R * 12, ay = y + (y - cy) / R * 12;
+            edges += `<circle class="flow-edge loop ${rm > 0 && !(pm > 0) ? 'rm' : 'pm'}" data-src="${s}" cx="${ax.toFixed(1)}" cy="${ay.toFixed(1)}" r="6" stroke-width="${(0.8 + 2.4 * Math.max(pm, rm)).toFixed(2)}"/>`;
+          }
+          continue;
+        }
+        if (pm > 0) edge(s, d, pm, 'pm');
+        if (rm > 0) edge(s, d, rm, 'rm');
+      }
+    for (let k = 0; k < NUM_OPS; k++) {
+      let send = 0;
+      const buses = [];
+      for (let j = 0; j < NUM_OUTPUTS; j++) if (v[outId(k, j)] > 0) { send = Math.max(send, v[outId(k, j)]); buses.push(OUT_BUSES[j]); }
+      if (send > 0) {
+        const [x, y] = pos(k);
+        const t = 0.33, ex = x + (cx - x) * (1 - t) * 0.76, ey = y + (cy - y) * (1 - t) * 0.76;
+        edges += `<path class="flow-edge out" data-src="${k}" d="M${(x + (cx - x) * 0.2).toFixed(1)} ${(y + (cy - y) * 0.2).toFixed(1)} L${ex.toFixed(1)} ${ey.toFixed(1)}" stroke-width="${(0.8 + 2 * send).toFixed(2)}" marker-end="url(#flowArrowOut)"/>`;
+        nodes += `<text class="flow-bus" x="${(x + (cx - x) * 0.55).toFixed(1)}" y="${(y + (cy - y) * 0.55 - 4).toFixed(1)}">${buses.join(' ')}</text>`;
+      }
+    }
+    for (let k = 0; k < NUM_OPS; k++) {
+      const [x, y] = pos(k);
+      nodes += `<g class="flow-node" data-op="${k}"><circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="12"/><text x="${x.toFixed(1)}" y="${(y + 4).toFixed(1)}">${k + 1}</text></g>`;
+    }
+    nodes += `<g class="flow-node out"><circle cx="${cx}" cy="${cy}" r="14"/><text x="${cx}" y="${cy + 4}">OUT</text></g>`;
+    this.flowSvg.innerHTML = `<defs>
+        <marker id="flowArrow" viewBox="0 0 10 10" refX="22" refY="5" markerWidth="5" markerHeight="5" orient="auto"><path d="M0 0 L10 5 L0 10 z"/></marker>
+        <marker id="flowArrowOut" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5" markerHeight="5" orient="auto"><path d="M0 0 L10 5 L0 10 z"/></marker>
+      </defs>${edges}${nodes}`;
+    this.flowEdges = Array.from(this.flowSvg.querySelectorAll('[data-src]'));
+    this.flowNodes = Array.from(this.flowSvg.querySelectorAll('.flow-node[data-op]'));
+  }
+
+  refresh(ids) {
+    if (!ids || [...ids].some(id => /^(pm|rm|out)\d/.test(id))) this.drawFlow();
+  }
+
+  // 30 Hz: operator activity (mean |output|) -> cell, header, node and edge glow
+  animateStats(ops, active) {
+    if (!this.animate || !ops) return;
+    const v = this.host.values;
+    const act = ops.map(a => clamp(a * 5, 0, 1));
+    for (let s = 0; s < NUM_OPS; s++) {
+      const on = (active >> s) & 1;
+      for (let d = 0; d < NUM_OPS; d++) {
+        const pm = this.cells[pmId(s, d)], rm = this.cells[rmId(s, d)];
+        pm.el.parentNode.style.setProperty('--glow', (on ? v[pmId(s, d)] * act[s] : 0).toFixed(3));
+        rm.el.parentNode.style.setProperty('--glow', (on ? v[rmId(s, d)] * act[s] : 0).toFixed(3));
+      }
+      for (let j = 0; j < NUM_OUTPUTS; j++) this.cells[outId(s, j)].el.parentNode.style.setProperty('--glow', (on ? v[outId(s, j)] * act[s] : 0).toFixed(3));
+    }
+    for (const e of this.flowEdges) e.style.setProperty('--glow', act[Number(e.dataset.src)].toFixed(3));
+    for (const n of this.flowNodes) n.style.setProperty('--glow', act[Number(n.dataset.op)].toFixed(3));
+  }
+
+  // 20 Hz: the scopes (128 points per operator, empty for silent ones)
+  drawScopes(ops) {
+    if (!this.animate || !ops) return;
+    for (let k = 0; k < NUM_OPS; k++) {
+      const pts = ops[k];
+      const u = this.scopeUi[k];
+      if (!pts || pts.length < 2) { u.path.setAttribute('d', 'M0 22 H120'); u.el.classList.remove('live'); continue; }
+      let peak = 0;
+      for (const p of pts) peak = Math.max(peak, Math.abs(p));
+      const g = peak > 1e-4 ? Math.min(20 / peak, 1 / Math.max(peak, 0.05)) * 1 : 0;   // normalise but keep quiet signals small
+      const scale = peak > 1e-4 ? 20 / Math.max(peak, 0.2) : 0;
+      void g;
+      let d = '';
+      for (let i = 0; i < pts.length; i++) d += `${i ? 'L' : 'M'}${(i / (pts.length - 1) * 120).toFixed(1)} ${(22 - pts[i] * scale).toFixed(1)}`;
+      u.path.setAttribute('d', d);
+      u.el.classList.toggle('live', peak > 1e-4);
+    }
   }
 
   // every grid id -> 0, then the layout

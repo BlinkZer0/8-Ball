@@ -149,14 +149,14 @@
     check($$('.flt-panel')[0].classList.contains('off'), 'filter off dims its panel');
     (listeners.params || []).forEach(f => f({ flt1On: 1 }));
     $$('.flt-env-btns .pd-btn')[0].click();
-    check($('.page[data-page="art"]').classList.contains('active') && $('.env-target.on').textContent === 'F1' && $('.env-kinds button.on').textContent === 'CUTOFF',
+    check($('.page[data-page="art"]').classList.contains('active') && $('.env-panel .env-target.on').textContent === 'F1' && $('.env-kinds button.on').textContent === 'CUTOFF',
           'CUTOFF ENV button opens the editor on filter 1 cutoff');
 
     // ---- articulators page: the envelope editor
     const envSvg = $('.env-svg');
     check(envSvg && $$('.env-pt').length === 4, `editor shows the 4 points of flt1Cutoff (${$$('.env-pt').length})`);
-    $$('.env-target').find(b => b.textContent === 'OP 2').click();
-    check($('.env-target.on').textContent === 'OP 2' && $('.env-kinds button.on').textContent === 'AMP' && $$('.env-pt').length === 4, 'OP 2 target shows its amp envelope');
+    $$('.env-panel .env-target').find(b => b.textContent === 'OP 2').click();
+    check($('.env-panel .env-target.on').textContent === 'OP 2' && $('.env-kinds button.on').textContent === 'AMP' && $$('.env-pt').length === 4, 'OP 2 target shows its amp envelope');
     // double-click on the curve adds a point and sends setEnv
     const er = envSvg.getBoundingClientRect();
     envSvg.setPointerCapture = () => {};
@@ -242,10 +242,55 @@
     check($$('.fx-chip')[0].textContent.includes('REVERB') && $$('.fx-panel')[0].classList.contains('fx-rev'), 'chips and panels follow the new order');
     (listeners.stats || []).forEach(f => f({ voices: 1, peak: 0.5, sustain: false, modWheel: 0, bpm: 120, ops: [0, 0, 0, 0, 0, 0, 0, 0], active: 1, lfo: [0, 0, 0, 0], gr: 6.5 }));
     check(/-6.5 dB/.test($('.fx-gr-val').textContent), 'gain reduction meter shows the stats value');
+
+    // ---- the animated matrix
+    $$('.page-tab').find(t => t.dataset.page === 'matrix').click();
+    check($$('.flow-node').length === 9 && $$('.flow-edge.pm').length >= 1 && $$('.flow-edge.out').length >= 1, `flow diagram: ${$$('.flow-edge').length} edges after the layout`);
+    const n13 = sent.length;
+    const anim = $$('.mx-panel.scopes .power')[0];
+    anim.click(); anim.click();
+    check(sent.slice(n13).filter(s => s.ev === 'setAnimate').length === 2 && $('#matrix-page').classList.contains('animating'), 'ANIMATE toggle sends setAnimate and ends up on');
+    (listeners.stats || []).forEach(f => f({ voices: 1, peak: 0.5, sustain: false, modWheel: 0, bpm: 120, ops: [0.3, 0.3, 0, 0, 0, 0, 0, 0], active: 3, lfo: [0, 0, 0, 0], gr: 0 }));
+    check(parseFloat($('[data-param="pm21"]').parentNode.style.getPropertyValue('--glow')) > 0.3, `an active PM cell glows (--glow ${$('[data-param="pm21"]').parentNode.style.getPropertyValue('--glow')})`);
+    (listeners.scope || []).forEach(f => f({ ops: [Array.from({ length: 128 }, (_, i) => Math.sin(i / 10) * 0.3), [], [], [], [], [], [], []] }));
+    check($$('.op-scope')[0].classList.contains('live') && $$('.op-scope .scr-line')[0].getAttribute('d').length > 500 && !$$('.op-scope')[1].classList.contains('live'), 'scope event draws op 1 and leaves silent ops flat');
+
+    // ---- the wave editor
     $$('.page-tab').find(t => t.dataset.page === 'ops').click();
+    $$('.op-strip')[0].querySelector('.op-wave .screen').click();
+    const we = $('.wave-editor');
+    check(we && !we.classList.contains('hidden') && $$('.hb-level').length === 64 && $$('.hb-phase').length === 64, 'clicking a wave screen opens the editor with 64 level and phase bars');
+    const lv = $('.wave-levels');
+    const lr = lv.getBoundingClientRect();
+    lv.setPointerCapture = () => {};
+    const n14 = sent.length;
+    lv.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, clientX: lr.left + lr.width * (2.5 / 64), clientY: lr.top + lr.height * 0.5, pointerId: 6, button: 0, buttons: 1 }));
+    lv.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, clientX: lr.left + lr.width * (2.5 / 64), clientY: lr.top + lr.height * 0.5, pointerId: 6, button: 0 }));
+    const sw = sent.slice(n14).filter(s => s.ev === 'setWave').pop();
+    check(sw && sw.data.op === 0 && sw.data.wave.mode === 'harmonic' && Math.abs(sw.data.wave.levels[2] - 0.5) < 0.05 && sw.data.wave.levels[0] === 1,
+          `painting partial 3 to 50% sends setWave (${sw && JSON.stringify(sw.data.wave.levels.slice(0, 4))})`);
+    check(sent.slice(n14).some(s => s.ev === 'setParam' && s.data.id === 'op1Wave' && s.data.value === 6), 'editing sets Op 1 Wave to Custom');
+    check(/CUSTOM/.test($$('.op-strip')[0].querySelector('.scr-text').textContent), 'the strip screen shows CUSTOM');
+    $('.wave-mode [data-mode="drawn"]').click();
+    const n15 = sent.length;
+    const dw = $('.wave-draw svg');
+    const dr2 = dw.getBoundingClientRect();
+    dw.setPointerCapture = () => {};
+    dw.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, clientX: dr2.left + 2, clientY: dr2.top + 2, pointerId: 7, button: 0, buttons: 1 }));
+    dw.dispatchEvent(new PointerEvent('pointermove', { bubbles: true, clientX: dr2.left + dr2.width / 2, clientY: dr2.top + dr2.height - 2, pointerId: 7, button: 0, buttons: 1 }));
+    dw.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, clientX: dr2.left + dr2.width / 2, clientY: dr2.top + dr2.height - 2, pointerId: 7, button: 0 }));
+    const sw2 = sent.slice(n15).filter(s => s.ev === 'setWave').pop();
+    check(sw2 && sw2.data.wave.mode === 'drawn' && sw2.data.wave.shape.length === 256 && sw2.data.wave.shape[128] < -0.5, 'DRAWN mode: drawing sends a 256-point shape');
+    $('.wave-mode [data-mode="harmonic"]').click();
+    const sw3 = sent.filter(s => s.ev === 'setWave').pop();
+    check(sw3 && sw3.data.wave.mode === 'harmonic' && sw3.data.wave.levels.length >= 1, 'back to HARMONIC converts the drawing to partials');
+    $('.wave-close').click();
+    check(we.classList.contains('hidden'), 'close hides the editor');
+    if (window.__uiTestPage === 'wave') { $$('.op-strip')[1].querySelector('.op-wave .screen').click(); $$('.wave-starters .pd-btn')[1].click(); }
 
     // leave the page the screenshot run asked for
-    if (window.__uiTestPage) { const t = $$('.page-tab').find(x => x.dataset.page === window.__uiTestPage); if (t) t.click(); }
+    if (window.__uiTestPage) { const t = $$('.page-tab').find(x => x.dataset.page === (window.__uiTestPage === 'wave' ? 'ops' : window.__uiTestPage)); if (t) t.click(); }
+    if (window.__uiTestPage === 'matrix') $$('.mx-layout').find(b => b.textContent.startsWith('Two 4-op')).click();
     const fails = results.filter(r => !r.ok).length;
     document.getElementById('ui-test-out').textContent = JSON.stringify({ fails, results });
     document.title = 'done';

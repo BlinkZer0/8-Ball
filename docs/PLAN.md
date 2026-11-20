@@ -1,8 +1,9 @@
 # Eight Ball: build plan
 
-Status (2026-11-20): **milestone 3 built**: on top of milestones 1-2 (the DSP core, the 8 operators, the PM /
-ring / output matrix, the plugin, OPERATORS, MATRIX, FILTERS, ARTICULATORS · LFO), the 7-unit FX chain in the
-engine and the FX page with drag-to-reorder, 12 starter presets. All automated checks pass; waiting for
+Status (2026-11-20): **milestone 4 built**: on top of milestones 1-3 (the DSP core, the 8 operators, the PM /
+ring / output matrix, the filters, the envelope editor, LFOs, mod matrix, the FX chain, the plugin), the operator
+wave editor (64 partials with phases, or a drawn cycle) and the animated matrix (glowing cells, the signal-flow
+diagram, eight live scopes, an ANIMATE toggle), 13 starter presets. All automated checks pass; waiting for
 hand-testing in Minihost Modular.
 
 The brief's milestones, each ending with a stop for hand-testing:
@@ -12,8 +13,8 @@ The brief's milestones, each ending with a stop for hand-testing:
 | 1 | DSP core + operators + matrix | plain-C++ engine, wavetable operators, 8x8 PM + 8x8 ring + output column, voice modes, 2x oversampling, the plugin, a usable UI for operators and the matrix | **done** |
 | 2 | Filters + articulators + LFOs | the FILTERS page, the multi-point envelope editor, 4 LFOs, the 16-slot mod matrix | **done** |
 | 3 | FX tab | Distortion, Chorus, Phaser, Delay, Reverb, EQ, Compressor / Limiter with drag-to-reorder | **done** |
-| 4 | Full UI + animated matrix | the harmonic editor and drawn shapes, glowing cells, per-operator scopes, signal-flow lines, Animate toggle | next |
-| 5 | Presets | 64 factory presets, level-matched, A/B compare | |
+| 4 | Full UI + animated matrix | the harmonic editor and drawn shapes, glowing cells, per-operator scopes, signal-flow lines, Animate toggle | **done** |
+| 5 | Presets | 64 factory presets, level-matched, A/B compare | next |
 | 6 | HTML build | the DSP core compiled to WebAssembly, Web Audio + Web MIDI, the same UI and presets | |
 
 ## Milestone 1 notes
@@ -167,3 +168,41 @@ lights when any unit is on. Soft FM Pad (chorus + reverb) and Pluck (synced ping
 - EQ: watch the curve while turning the knobs; LO CUT on a bass; a MID boost with a narrow Q.
 - Compressor: THRESH down with a chord, the GR meter moves; LIMIT with MAKEUP up: no clipping.
 - Drag REVERB before DISTORTION, then DELAY first; save a preset and reload it: the order comes back.
+
+## Milestone 4 notes
+
+**Wave editor** (`ui/js/waveeditor.js`, an overlay on the OPERATORS page, opened by clicking an operator's wave
+screen):
+- HARMONIC: 64 partials (the engine takes up to 128; files with more keep them, the editor shows 64), a level bar
+  (0..100%) and a phase bar (−180°..+180°, stored in turns 0..1) each; drag across the bars to paint, Shift for
+  nothing special (the bars are coarse enough), double-click a bar to reset it. DRAWN: `ShapeEditor` with 256
+  points. Mode switches convert: harmonic → drawn renders the sum (normalised), drawn → harmonic is a DFT, the same
+  maths as `partialsFromShape`. Starters: sine, saw, square, triangle, half-sine (drawn), organ. CLEAR, RANDOM
+  (a few decaying partials, drawn out when in drawn mode), NORMALIZE. A preview of one cycle.
+- Opening the editor on a starter wave shows that starter's partials (or the half-sine's drawing), so there is
+  something to start from; the first edit switches the operator's Wave to Custom and sends `setWave`. Sends are
+  throttled to 30 Hz while dragging (the plugin bakes a table per send, about 2 ms); the last state always goes
+  out on release. The host's echo of a local edit is ignored for 300 ms as for envelopes.
+
+**Animated matrix** (`ui/js/matrix.js`, second row of the MATRIX page):
+- The engine keeps a 512-sample ring per operator (its output summed over voices, at the base rate even with
+  2× OS) and `copyScope` hands out every 4th sample. The processor copies the eight rings into a buffer under a
+  sequence counter whenever the UI has asked for them (`setAnimate`), the editor sends `scope` at 20 Hz for the
+  active operators only (silent ones send an empty array).
+- Glow: `stats.ops` (mean |output|) × a cell's depth drives a `--glow` custom property on each cell; the row /
+  column numbers, the flow nodes and the edges use the same value. The flow diagram is rebuilt from the grid and
+  output parameters whenever one changes; with ANIMATE on the PM and output edges run a dash animation.
+- ANIMATE is remembered in localStorage (on by default). Off, the glow is cleared, the scopes go flat and the
+  plugin stops sending scopes.
+
+**Preset**: Harmonic Pad (two custom harmonic operators, a slow LFO on the cutoff, chorus + reverb).
+
+**What to try in Minihost Modular** (milestone 4):
+- OPERATORS: click op 1's wave screen; paint the level bars (hear the timbre change while dragging), the phase
+  bars (a saw's phases change the shape, not much the sound), SAW / SQUARE / ORGAN, DRAWN and draw a shape, back
+  to HARMONIC (the partials of your drawing), RANDOM, NORMALIZE, CLEAR, ✕ or Esc. The strip screen shows the
+  result; the Wave dropdown reads Custom. Pick a starter in the dropdown again: the custom wave stays in the
+  model, Custom brings it back. Save a preset with custom waves and reload it; save the project and reopen it.
+- MATRIX: with ANIMATE on, play a chord on Two 4-op stacks: the cells, numbers, flow lines and scopes move;
+  turn ANIMATE off: everything stops (and the plugin stops sending scopes). Load Harmonic Pad and watch the
+  scopes of op 1 and 2.
