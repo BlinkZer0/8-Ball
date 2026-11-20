@@ -78,6 +78,7 @@ public:
     std::atomic<float> statBpm { 120.0f };
     std::array<std::atomic<float>, eightball::kNumOps> statOpActivity {};
     std::atomic<int>   statActiveMask { 0 };          // bit k = operator k is doing something
+    std::array<std::atomic<float>, eightball::kNumLfos> statLfo {};   // LFO outputs, -1..1
 
 private:
     void setPresetInfo (const juce::String& id, const juce::String& name, const juce::String& category);

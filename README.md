@@ -1,4 +1,4 @@
-# Eight Ball: v0.1 (milestone 1 of 6)
+# Eight Ball: v0.2 (milestone 2 of 6)
 
 Eight Ball is an 8-operator FM synthesizer: harmonic-editor wavetable operators, an 8×8 phase-modulation grid
 plus an 8×8 ring-modulation grid, three multimode filters, freeform envelopes, four LFOs, a mod matrix, an FX
@@ -9,7 +9,7 @@ same way.
 
 | Build | Where | Status |
 |---|---|---|
-| **VST3 plugin** + Standalone | [`vst/`](vst/README.md) | milestone 1: the DSP core, the 8 operators, the matrix, the plugin, the OPERATORS and MATRIX pages, 10 starter presets; all automated checks pass |
+| **VST3 plugin** + Standalone | [`vst/`](vst/README.md) | milestone 2: the DSP core, the 8 operators, the matrix, the three filters, the envelope editor, 4 LFOs, the 16-slot mod matrix, the plugin, the OPERATORS / MATRIX / FILTERS / ARTICULATORS pages, 12 starter presets; all automated checks pass |
 | **Web build** | `web/index.html` | milestone 6 |
 
 The plan, the milestones and the measured results are in [docs/PLAN.md](docs/PLAN.md). The house rules are in
@@ -21,9 +21,13 @@ The plan, the milestones and the measured results are in [docs/PLAN.md](docs/PLA
 |---|---|
 | ![Operators page](vst/tests/screenshots/ui-ops.png) | ![Matrix page](vst/tests/screenshots/ui-matrix.png) |
 
+| FILTERS | ARTICULATORS · LFO |
+|---|---|
+| ![Filters page](vst/tests/screenshots/ui-filters.png) | ![Articulators page](vst/tests/screenshots/ui-art.png) |
+
 (made by `vst\tests\run-ui-tests.ps1` from the real UI with a stand-in bridge)
 
-## What it does so far (milestone 1)
+## What it does so far (milestones 1 and 2)
 
 **The 8 operators**
 - Each operator plays a **band-limited, mipmapped wavetable** baked from a set of partials (level and phase each,
@@ -37,8 +41,8 @@ The plan, the milestones and the measured results are in [docs/PLAN.md](docs/PLA
 - **Mute** removes an operator entirely; **solo** keeps only the soloed operators' outputs, but their modulators
   keep working, so a soloed carrier sounds as it does in the mix.
 - A quick **AMP ENV** (attack, decay, sustain, release) per operator edits the four points of its amplitude
-  envelope. The envelopes are freeform multi-point underneath (tension per segment, sustain point, loop region,
-  tempo sync); the editor comes in milestone 2.
+  envelope; the label opens the full editor. **ENV AMOUNT** sets how far the pitch envelope (±48 semitones) and the
+  modulation-index envelope reach.
 
 **The matrix**
 - An **8×8 PM grid**: every cell is a depth knob for "operator X modulates operator Y"; the diagonal is
@@ -51,13 +55,30 @@ The plan, the milestones and the measured results are in [docs/PLAN.md](docs/PLA
   **Randomize** with an amount knob.
 - Operators that reach no output (and nothing that only feeds them) cost nothing.
 
-**Filters** (engine only in milestone 1; the page comes in milestone 2)
+**Filters** (FILTERS page)
 - Three multimode filters per voice: low-pass, band-pass, high-pass, 12 or 24 dB, with cutoff, resonance, drive,
-  key tracking, envelope amount and velocity. Routing: Parallel, Series 1→2→3, or 1+2 → 3; a mix level each.
+  key tracking, envelope amount (±5 octaves from the filter's own cutoff envelope) and velocity, a mix level each
+  and an on/off that is a true bypass. Each panel shows its response curve and which operators feed it.
+- Routing: **Parallel**, **Series 1 › 2 › 3**, or **1 + 2 › 3**, with a diagram. Operators reach the filters through
+  the output column on the MATRIX page.
+
+**Articulators** (ARTICULATORS · LFO page)
+- A **freeform multi-point envelope editor** for all 30 envelopes: amplitude, pitch and modulation index per
+  operator, cutoff and level per filter. Drag points (time and level), drag a segment to curve it (tension), double-click
+  to add or delete a point, right-click or the toolbar for the **sustain point** and a **loop region**, **SYNC** to
+  work in beats of the host tempo, starting shapes (ADSR, Pluck, Swell, Gate, …), copy and paste. The editor's
+  level scale reads in the envelope's own units (semitones, octaves, ×index).
+- **4 LFOs**: sine, triangle, saw, square, sample & hold, or a **drawn** shape (draw it in the LFO's screen); rate
+  or **tempo-synced** divisions (locked to the song position while the host plays); depth; **delay** (each voice
+  fades the LFO in); phase; a live meter.
+- A **16-slot mod matrix**: any LFO, any envelope, velocity, mod wheel, aftertouch, pitch bend or key position to
+  **any knob** (every float parameter, grouped by section). Source × amount is added to the knob's position
+  (±100% = the knob's full range); sources that differ per voice (envelopes, velocity, key, the LFOs with their
+  delay) act per voice. Knobs that are being modulated carry a marker.
 
 **Voices**
 - 1–32 voices (16 by default), **Poly / Mono / Legato**, **portamento** with a time knob, sustain pedal,
-  pitch bend with a range knob, aftertouch and mod wheel received (sources for the mod matrix in milestone 2).
+  pitch bend with a range knob, aftertouch and mod wheel.
 - **2× oversampling** (toggle): the whole voice path runs at twice the rate and is decimated with a polyphase
   half-band filter. 1 sample of latency, reported to the host.
 - Every knob is smoothed in the engine (about 5 ms) and everything per-sample is ramped: no zipper noise, no
@@ -73,8 +94,9 @@ The plan, the milestones and the measured results are in [docs/PLAN.md](docs/PLA
 - Hover any control for a tooltip with its name and value.
 
 **Presets**
-- 10 starter presets (Init plus one per category: E-Pianos & Bells, Basses, Leads, Pads, Brass & Plucks,
-  Organs & Keys, Evolving & Textures, FX & Percussion). The 64 level-matched factory presets come in milestone 5.
+- 12 starter presets (Init plus one or two per category: E-Pianos & Bells, Basses, Leads, Pads, Brass & Plucks,
+  Organs & Keys, Evolving & Textures, FX & Percussion; Wobble Bass and Vibrato Lead use the LFOs and the mod
+  matrix). The 64 level-matched factory presets come in milestone 5.
 - A category browser (PRESETS page), ‹ › arrows, INIT, SAVE (replaces the current user preset), SAVE AS, LOAD,
   FOLDER; `*` after the name when you've changed something.
 - `.ebpreset` files (plain JSON: every parameter plus the waves, envelopes and LFO shapes) in
@@ -92,7 +114,7 @@ vst\package.ps1    dist\Eight-Ball-<version>-Windows-x64.zip (Standalone + VST3 
 
 - Loads as an instrument with stereo out and MIDI in. All 491 parameters can be automated, and a knob drag records
   as one automation move. MIDI events are applied at the exact sample they arrive.
-- The 10 presets also appear in the DAW's program menu.
+- The factory presets also appear in the DAW's program menu.
 - The UI is HTML/SVG shown through WebView2 and scaled to the window size.
 - Requirements: Windows, Visual Studio 2022 or later (C++ workload), Git. JUCE 8.0.17 is reused from a sibling
   project's download or fetched on the first build. Release builds link the MSVC runtime statically; users need
@@ -106,18 +128,22 @@ Build details, the bridge between the UI and C++, tests and troubleshooting are 
 
 | case | % of one core |
 |---|---|
-| 16 voices × 8 operators, unison 1 (all carriers + 4 PM cells) | 7.8% |
-| the same with 2× oversampling | 14.1% |
-| 16 voices × 8 operators, unison 4 | 14.8% |
-| 16 voices × 2 operators | 2.5% |
+| 16 voices × 8 operators, unison 1 (all carriers + 4 PM cells) | 8.7% |
+| the same with 2× oversampling | 14.8% |
+| 16 voices × 8 operators, unison 4 | 15.8% |
+| 16 voices × 2 operators | 2.7% |
 
-Automated checks (all passing): the parameter table and the preset files, 7 groups of engine checks (wavetables,
+(milestone 1 measured 7.8 / 14.1 / 14.8 / 2.5%; the per-voice mod-matrix pass added about a point)
+
+Automated checks (all passing): the parameter table and the preset files, 9 groups of engine checks (wavetables,
 envelopes, operators, matrix, filters, voices, quality: bypass switches, clicks, stuck notes, aliasing,
-oversampling), `check-params.ps1` (491 parameters match between C++ and JS), `run-ui-tests.ps1` (24 UI checks per
-page), `--host-check` (the built VST3 loaded like a DAW: parameters, sound, automation, state round trip).
+oversampling; LFOs + mod matrix: rate, sync, delay, every shape, bypass of the LFO switch / slot switch / amount /
+depth, per-voice sources, global destinations, clicks; every factory preset through a full note),
+`check-params.ps1` (491 parameters match between C++ and JS), `run-ui-tests.ps1` (48 UI checks per page),
+`--host-check` (the built VST3 loaded like a DAW: parameters, sound, automation, state round trip).
 
 **Still to confirm by hand:** everything in Minihost Modular and FL Studio: sound, the UI, MIDI learn, the
-right-click host menu, project save / reopen.
+right-click host menu, project save / reopen, the envelope editor and the LFOs by ear.
 
 ## Dev workflow
 

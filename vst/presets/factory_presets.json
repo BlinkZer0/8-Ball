@@ -1,7 +1,7 @@
 {
   "format": "Eight Ball Factory Presets",
   "version": 1,
-  "note": "preset values = parameter defaults <- template chain (base first) <- the preset's own params. Model blocks (waves, envs, lfoShapes) merge the same way. Envelope points are [time s, level 0..1, tension -1..1]; levels for pitch/mod envelopes: 0.5 = neutral.",
+  "note": "preset values = parameter defaults <- template chain (base first) <- the preset's own params. Model blocks (waves, envs, lfoShapes) merge the same way. Envelope points are [time s, level 0..1, tension -1..1] with absolute times; levels for pitch/mod envelopes: 0.5 = neutral. 'modDst': { 'mod1Dst': '<parameter id>' } names a mod slot's destination by id instead of its list index. Mod sources: 0 none, 1-4 LFO 1-4, 5-12 op amp env, 13-20 op pitch env, 21-28 op mod env, 29-31 filter cutoff env, 32-34 filter level env, 35 velocity, 36 mod wheel, 37 aftertouch, 38 pitch bend, 39 key.",
   "templates": {
     "init": { "params": {} },
     "perc": {
@@ -40,6 +40,18 @@
         "envs": {
           "op1Amp": { "points": [[0, 0], [0.003, 1], [0.25, 0.75, -0.5], [0.4, 0, -0.5]], "sustain": 2 },
           "op2Amp": { "points": [[0, 0], [0.002, 1], [0.18, 0.25, -0.7], [0.3, 0, -0.5]], "sustain": 2 }
+        } },
+      { "name": "Wobble Bass",
+        "params": { "voiceMode": 1, "op1Level": 1, "op2Ratio": 1, "op2Level": 0.8, "pm21": 0.45, "pm22": 0.3, "op3Ratio": 0.5, "op3Level": 0.7,
+                    "out1Dry": 0, "out1F1": 1, "out3Dry": 0, "out3F1": 0.8,
+                    "flt1Cutoff": 350, "flt1Reso": 0.55, "flt1Slope": 1, "flt1KeyTrack": 0.3,
+                    "lfo1On": 1, "lfo1Wave": 0, "lfo1Sync": 1, "lfo1Div": 5, "lfo1Depth": 1,
+                    "mod1Src": 1, "mod1Dst": 0, "mod1Amt": 0.32 },
+        "modDst": { "mod1Dst": "flt1Cutoff" },
+        "envs": {
+          "op1Amp": { "points": [[0, 0], [0.005, 1], [0.3, 0.9, -0.3], [0.55, 0, -0.5]], "sustain": 2 },
+          "op2Amp": { "points": [[0, 0], [0.005, 1], [0.4, 0.6, -0.5], [0.7, 0, -0.5]], "sustain": 2 },
+          "op3Amp": { "points": [[0, 0], [0.005, 1], [0.3, 1, 0], [0.55, 0, -0.5]], "sustain": 2 }
         } }
     ] },
     { "name": "Leads", "presets": [
@@ -50,6 +62,18 @@
           "op1Amp": { "points": [[0, 0], [0.04, 1], [0.3, 0.85, -0.3], [0.5, 0, -0.5]], "sustain": 2 },
           "op2Amp": { "points": [[0, 0], [0.08, 1], [0.5, 0.6, -0.3], [0.7, 0, -0.5]], "sustain": 2 },
           "op3Amp": { "points": [[0, 0], [0.12, 1], [0.5, 0.5, -0.3], [0.7, 0, -0.5]], "sustain": 2 }
+        } },
+      { "name": "Vibrato Lead",
+        "params": { "voiceMode": 2, "portaOn": 1, "portaTime": 0.06, "op1Level": 1, "op2Ratio": 2, "op2Level": 0.6, "op2Vel": 0.6, "pm21": 0.4, "pm22": 0.15,
+                    "out1Dry": 0, "out1F1": 1, "flt1Cutoff": 2500, "flt1Reso": 0.2, "flt1EnvAmt": 0.4, "flt1Vel": 0.4,
+                    "lfo2On": 1, "lfo2Rate": 5.5, "lfo2Delay": 0.35, "lfo2Depth": 1,
+                    "mod1Src": 2, "mod1Amt": 0.04, "mod2Src": 2, "mod2Amt": 0.04,
+                    "mod3Src": 36, "mod3Amt": 0.35 },
+        "modDst": { "mod1Dst": "op1Fine", "mod2Dst": "op2Fine", "mod3Dst": "pm21" },
+        "envs": {
+          "op1Amp": { "points": [[0, 0], [0.02, 1], [0.4, 0.85, -0.3], [0.75, 0, -0.5]], "sustain": 2 },
+          "op2Amp": { "points": [[0, 0], [0.03, 1], [0.6, 0.5, -0.3], [0.95, 0, -0.5]], "sustain": 2 },
+          "flt1Cutoff": { "points": [[0, 0], [0.01, 1], [0.5, 0.3, -0.5], [0.9, 0, -0.5]], "sustain": 2 }
         } }
     ] },
     { "name": "Pads", "presets": [

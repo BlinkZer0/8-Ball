@@ -67,13 +67,22 @@ class Segmented {
 }
 
 class SelectBox {
-  constructor(def, value, onChange, labels) {
+  // labels: optional alternative texts; groups: optional array parallel to the choices, consecutive equal
+  // names become an <optgroup> ('' = none)
+  constructor(def, value, onChange, labels, groups) {
     this.def = def;
     this.onChange = onChange;
     const s = document.createElement('select');
     s.className = 'param-select';
     s.setAttribute('aria-label', def.name);
-    (labels || def.choices).forEach((label, i) => s.appendChild(new Option(label, String(i))));
+    let grp = null, grpName = null;
+    (labels || def.choices).forEach((label, i) => {
+      const opt = new Option(label, String(i));
+      const gname = groups ? groups[i] : '';
+      if (!gname) { s.appendChild(opt); grp = null; grpName = null; return; }
+      if (gname !== grpName) { grp = document.createElement('optgroup'); grp.label = gname; grpName = gname; s.appendChild(grp); }
+      grp.appendChild(opt);
+    });
     s.addEventListener('change', () => this.onChange(Number(s.value)));
     s.addEventListener('wheel', (e) => {
       e.preventDefault();

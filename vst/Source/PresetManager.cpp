@@ -27,6 +27,23 @@ int applyParamObject (const juce::var& obj, std::array<float, kNumParams>& value
         }
     return found;
 }
+
+// "modDst": { "mod1Dst": "flt1Cutoff" }: a mod slot's destination named by parameter id instead of
+// its index in the destination list (factory file only; readable and immune to the list growing).
+void applyModDstObject (const juce::var& obj, std::array<float, kNumParams>& values)
+{
+    auto* o = obj.getDynamicObject();
+    if (o == nullptr) return;
+    const auto& dst = modDestParams();
+    for (const auto& prop : o->getProperties())
+    {
+        const int slotParam = paramIndexForId (prop.name.toString());
+        const int target = paramIndexForId (prop.value.toString());
+        if (slotParam < 0 || target < 0) { jassertfalse; continue; }   // typo in the factory file
+        for (size_t i = 0; i < dst.size(); ++i)
+            if (dst[i] == target) { values[(size_t) slotParam] = (float) i; break; }
+    }
+}
 } // namespace
 
 PresetManager::PresetManager()
@@ -56,6 +73,7 @@ void PresetManager::loadFactory()
         if (! t.isObject()) return;
         applyTemplate (t["base"].toString(), d, depth + 1);
         applyParamObject (t["params"], d.values);
+        applyModDstObject (t["modDst"], d.values);
         modelDataFromJson (t, d.model);
     };
 
@@ -72,6 +90,7 @@ void PresetManager::loadFactory()
                 d.category = cat["name"].toString();
                 applyTemplate (p["base"].toString(), d, 0);
                 applyParamObject (p["params"], d.values);
+                applyModDstObject (p["modDst"], d.values);
                 modelDataFromJson (p, d.model);
                 factoryPresets.push_back (std::move (d));
             }

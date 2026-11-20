@@ -1,16 +1,17 @@
 # Eight Ball: build plan
 
-Status (2026-11-20): **milestone 1 built**: the DSP core, the 8 operators, the PM / ring / output matrix, the
-plugin (VST3 + Standalone), a working OPERATORS and MATRIX UI, 10 starter presets, the test tool. All automated
-checks pass; waiting for hand-testing in Minihost Modular.
+Status (2026-11-20): **milestone 2 built**: on top of milestone 1 (the DSP core, the 8 operators, the PM / ring /
+output matrix, the plugin, OPERATORS and MATRIX), the FILTERS page, the multi-point envelope editor, 4 LFOs and
+the 16-slot mod matrix in the engine and on the ARTICULATORS · LFO page, 12 starter presets. All automated checks
+pass; waiting for hand-testing in Minihost Modular.
 
 The brief's milestones, each ending with a stop for hand-testing:
 
 | # | Milestone | What it delivers | Status |
 |---|---|---|---|
 | 1 | DSP core + operators + matrix | plain-C++ engine, wavetable operators, 8x8 PM + 8x8 ring + output column, voice modes, 2x oversampling, the plugin, a usable UI for operators and the matrix | **done** |
-| 2 | Filters + articulators + LFOs | the FILTERS page (DSP is already in the engine), the multi-point envelope editor, 4 LFOs, the 16-slot mod matrix | next |
-| 3 | FX tab | Distortion, Chorus, Phaser, Delay, Reverb, EQ, Compressor / Limiter with drag-to-reorder | |
+| 2 | Filters + articulators + LFOs | the FILTERS page, the multi-point envelope editor, 4 LFOs, the 16-slot mod matrix | **done** |
+| 3 | FX tab | Distortion, Chorus, Phaser, Delay, Reverb, EQ, Compressor / Limiter with drag-to-reorder | next |
 | 4 | Full UI + animated matrix | the harmonic editor and drawn shapes, glowing cells, per-operator scopes, signal-flow lines, Animate toggle | |
 | 5 | Presets | 64 factory presets, level-matched, A/B compare | |
 | 6 | HTML build | the DSP core compiled to WebAssembly, Web Audio + Web MIDI, the same UI and presets | |
@@ -50,12 +51,15 @@ The brief's milestones, each ending with a stop for hand-testing:
 
 **Measured** (`EightBallTests --bench`, Release, this machine, 48 kHz):
 
-| case | % of one core |
-|---|---|
-| 16 voices x 8 operators, unison 1, all carriers + 4 PM cells | 7.8% |
-| the same with 2x oversampling | 14.1% |
-| 16 voices x 8 operators, unison 4 | 14.8% |
-| 16 voices x 2 operators (a classic 2-op patch) | 2.5% |
+| case | milestone 1 | milestone 2 |
+|---|---|---|
+| 16 voices x 8 operators, unison 1, all carriers + 4 PM cells | 7.8% | 8.7% |
+| the same with 2x oversampling | 14.1% | 14.8% |
+| 16 voices x 8 operators, unison 4 | 14.8% | 15.8% |
+| 16 voices x 2 operators (a classic 2-op patch) | 2.5% | 2.7% |
+
+(% of one core; milestone 2 adds the LFO and mod-slot pass per chunk and the per-voice parameter lookups, with no
+slots active in the benchmark)
 
 Found by the checks during milestone 1 (fixed): parameters set to exactly 0 never reached the engine (the
 first-value compare started from 0 instead of "unset"); a curved envelope segment could evaluate a hair past its
@@ -81,3 +85,51 @@ the model: pass).
 - Dev loop: set `EIGHTBALL_UI_DIR=<repo>\vst\ui` before starting Minihost and edit `vst/ui` live (reopen the
   window); `start.bat -Ui` previews the UI in a browser without audio; `EightBallTests --render "Basses/FM Punch
   Bass" out.wav` renders a preset to listen to without a DAW.
+
+## Milestone 2 notes
+
+**Engine** (`SynthEngine.h`):
+- **LFOs** are four global oscillators updated once per chunk: sine, triangle, saw (rising), square, sample & hold
+  (a new random value each cycle), or the drawn 64-point shape from the model (linear interpolation). Rate in Hz
+  or a tempo division; a synced LFO locks its phase to the host's song position while playing (`ppq`, advanced by
+  the samples rendered since the block started) and free-runs otherwise. Phase offset in degrees, depth 0..1.
+  Each voice fades an LFO in over the LFO's Delay (linear, from the note start, also after a retrigger).
+- **The mod matrix** resolves the active slots per chunk (on, a source, a destination, amount not 0). A
+  destination among the operator, grid and filter parameters is per voice: in `updateVoice` the slots' sources are
+  read for that voice (its envelope levels, velocity, key, the faded LFOs, the wheel / aftertouch / bend), summed
+  per destination, added to the parameter's normalised value, clamped, and mapped; the operator / grid / filter
+  code reads those parameters through `pv (voice, index)`, which falls back to the global value. The other
+  destinations (portamento time, the FX parameters) are modulated globally by the global sources only, with the
+  unmodulated value kept in `base[]` so the modulation is removed again when the slot goes. Everything a slot
+  changes lands in the per-chunk targets, so it is ramped per sample like a knob move.
+- Source ranges: amplitude and filter envelopes 0..1; pitch and mod-index envelopes −1..1 (their level 0.5 is
+  neutral); velocity, wheel, aftertouch 0..1; bend −1..1; key −1 at C1 .. +1 at C9 (C4 = 0).
+- The engine reports the LFO outputs (`lfoValue`) and the plugin sends them as `stats.lfo[4]` for the meters.
+
+**UI**:
+- FILTERS: one panel per filter (on, LP / BP / HP, 12 / 24 dB, a response screen computed from the SVF's
+  analogue prototype at the current cutoff and resonance, the seven knobs, buttons that open the two envelopes),
+  and the routing panel with a diagram and "fed by op …" per filter.
+- ARTICULATORS · LFO: the envelope editor (`envelope.js`), the target bar (OP 1-8 / F1-F3 × AMP / PITCH / MOD IDX
+  or CUTOFF / LEVEL), the toolbar (SYNC, SUSTAIN, LOOP START / END, CLEAR LOOP, DELETE, shapes, COPY / PASTE), the
+  envelope's amount knob, the four LFO strips (wave, a shape screen that is drawable for the Drawn wave, rate,
+  depth, delay, phase, sync + division, a live meter), and the 16 mod slots with a grouped destination list.
+  Knobs an active slot drives carry an orange marker; the page LED lights for any LFO or slot in use.
+- The quick AMP ENV knobs and the editor edit the same envelope: an edit in one refreshes the other, and the host's
+  echo of a local edit is ignored for 300 ms as for parameters.
+
+**Factory file**: `"modDst": { "mod1Dst": "flt1Cutoff" }` names a slot's destination by id (the numeric list index
+is unreadable). Two starters use the new features: Wobble Bass (synced LFO 1 → filter 1 cutoff) and Vibrato Lead
+(LFO 2 with a delay → op fine tune; the mod wheel → PM depth).
+
+**What to try in Minihost Modular** (milestone 2):
+- FILTERS: route op 1 to F1 on the MATRIX page (or load Wobble Bass), sweep CUTOFF and RESO, try 24 dB, BP / HP,
+  DRIVE, the routing modes, the ON switch (must be a clean bypass), ENV with the CUTOFF ENV button.
+- ARTICULATORS: pick OP 1 / AMP, drag points, drag a segment to curve it, double-click to add a point, right-click a
+  point for sustain / loop, SYNC and change the host tempo, the shapes menu; then PITCH with the AMOUNT knob (a
+  pitch drop), MOD IDX on a modulator-fed carrier. Check the quick ADSR knobs on OPERATORS follow.
+- LFO 1 → a slot → Op 1 Level at 4 Hz (tremolo), then Filter 1 Cutoff; SYNC with 1/4 and press play; DELAY 1 s;
+  Drawn wave and draw in the screen; the meter moves.
+- Mod matrix: Velocity → Filter 1 Cutoff, Mod Wheel → PM 2 > 1, Key → Op 1 Pan, Aftertouch → anything; two slots
+  on one knob. The orange marker on the destination knob. Save a preset with slots and envelopes, reload it,
+  save the project and reopen it.

@@ -546,6 +546,154 @@ void qualityTests()
     if (m2 != nullptr) CHECK (m2->envs[0].numPoints == 2 && m2->tables[0]->table[7][512] > 0.3f);
     store.collectRetired();
 }
+
+// ---- LFOs + the mod matrix ----------------------------------------------------
+// mod destination choice index of a parameter (the slot's Dst value)
+int dstIndex (const char* id)
+{
+    const int p = paramIndex (id);
+    const auto& m = modDestParams();
+    for (size_t i = 0; i < m.size(); ++i) if (m[i] == p) return (int) i;
+    return -1;
+}
+Patch& slot (Patch& p, int s, int src, const char* dstId, float amt)
+{
+    return p.set (modParam (s, mOn), 1).set (modParam (s, mSrc), (float) src).set (modParam (s, mDst), (float) dstIndex (dstId)).set (modParam (s, mAmt), amt);
+}
+// RMS per window (5 ms) with the mean removed: the amplitude modulation as a signal at 200 Hz
+std::vector<float> ampSeries (const std::vector<float>& m, size_t from, size_t to)
+{
+    const size_t w = 240;
+    std::vector<float> s;
+    for (size_t i = from; i + w <= to; i += w) s.push_back ((float) rms (m, i, i + w));
+    double mean = 0;
+    for (float v : s) mean += v;
+    mean /= (double) std::max<size_t> (1, s.size());
+    for (float& v : s) v -= (float) mean;
+    return s;
+}
+double maxDiff (const Render& a, const Render& b)
+{
+    double worst = 0;
+    for (size_t i = 0; i < a.L.size(); ++i) worst = std::max (worst, (double) std::abs (a.L[i] - b.L[i]));
+    return worst;
+}
+
+void modulationTests()
+{
+    CHECK (dstIndex ("op1Level") > 0 && dstIndex ("flt1Cutoff") > 0 && dstIndex ("master") < 0);
+
+    // LFO 1 (sine, 4 Hz) -> op 1 level: the amplitude wobbles at 4 Hz
+    Patch p = Patch().set ("lfo1On", 1).set ("lfo1Rate", 4).set ("lfo1Depth", 1);
+    slot (p, 0, srcLfo1, "op1Level", 0.5f);
+    auto m = play (p).mono();
+    auto s = ampSeries (m, kA, (size_t) (1.5 * kSr));
+    const double fTrem = zeroCrossFreq (s, 0, s.size(), 200.0);
+    CHECKF (std::abs (fTrem - 4.0) < 0.3, "tremolo %g Hz", fTrem);
+    double lo = 1e9, hi = 0;
+    for (float v : s) { lo = std::min (lo, (double) v); hi = std::max (hi, (double) v); }
+    CHECKF (hi - lo > 0.05, "tremolo depth %g", hi - lo);
+
+    // BYPASS: the LFO off, the slot off, or amount 0: the render is exactly the unmodulated one
+    Patch plain;
+    const auto ref = play (plain);
+    Patch q = p; q.set ("lfo1On", 0);
+    CHECKF (maxDiff (play (q), ref) == 0.0, "lfo off bypass");
+    q = p; q.set ("mod1On", 0);
+    CHECKF (maxDiff (play (q), ref) == 0.0, "slot off bypass");
+    q = p; q.set ("mod1Amt", 0);
+    CHECKF (maxDiff (play (q), ref) == 0.0, "amount 0 bypass");
+    q = p; q.set ("lfo1Depth", 0);
+    CHECKF (maxDiff (play (q), ref) == 0.0, "depth 0 bypass");
+    q = p; q.set ("mod1Dst", 0);
+    CHECKF (maxDiff (play (q), ref) == 0.0, "no destination bypass");
+
+    // tempo sync: 1/4 at 120 BPM = 2 Hz, at 240 BPM = 4 Hz
+    p.set ("lfo1Sync", 1).set ("lfo1Div", 5);
+    auto r120 = render (p, 563, { on (1, 69) }, 120.0), r240 = render (p, 563, { on (1, 69) }, 240.0);
+    s = ampSeries (r120.mono(), kA, (size_t) (1.5 * kSr));
+    CHECKF (std::abs (zeroCrossFreq (s, 0, s.size(), 200.0) - 2.0) < 0.3, "sync 120: %g Hz", zeroCrossFreq (s, 0, s.size(), 200.0));
+    s = ampSeries (r240.mono(), kA, (size_t) (1.5 * kSr));
+    CHECKF (std::abs (zeroCrossFreq (s, 0, s.size(), 200.0) - 4.0) < 0.3, "sync 240: %g Hz", zeroCrossFreq (s, 0, s.size(), 200.0));
+    p.set ("lfo1Sync", 0);
+
+    // delay: the LFO fades in over 1 s, so the wobble is small early and full late
+    p.set ("lfo1Delay", 1.0f);
+    m = play (p).mono();
+    auto early = ampSeries (m, (size_t) (0.1 * kSr), (size_t) (0.35 * kSr)), late = ampSeries (m, (size_t) (1.2 * kSr), (size_t) (1.45 * kSr));
+    auto span = [] (const std::vector<float>& x) { double a = 1e9, b = -1e9; for (float v : x) { a = std::min (a, (double) v); b = std::max (b, (double) v); } return b - a; };
+    CHECKF (span (early) < 0.4 * span (late), "lfo delay early %g late %g", span (early), span (late));
+    p.set ("lfo1Delay", 0);
+
+    // the other shapes run (square gives a steeper amplitude change than the sine); S&H holds a value per cycle
+    p.set ("lfo1Wave", lfoSquare);
+    auto sq = ampSeries (play (p).mono(), kA, (size_t) (1.5 * kSr));
+    CHECK (maxStep (sq) > 2.0 * maxStep (ampSeries (m, kA, (size_t) (1.5 * kSr))));
+    p.set ("lfo1Wave", lfoSampleHold).set ("lfo1Rate", 2);
+    m = play (p).mono();
+    CHECK (std::abs (rmsSec (m, 0.55, 0.6) - rmsSec (m, 0.65, 0.7)) < 0.02 * rmsSec (m, 0.55, 0.6));   // flat within a cycle
+    // drawn shape: a constant +1 with amount -0.5 halves the level
+    p.set ("lfo1Wave", lfoDrawn).set ("mod1Amt", -0.5f);
+    p.model.lfoShapes[0].pts.fill (1.0f);
+    CHECKF (std::abs (rms (play (p).mono(), kA, kB) / rms (ref.mono(), kA, kB) - 0.5) < 0.03, "drawn lfo: %g", rms (play (p).mono(), kA, kB) / rms (ref.mono(), kA, kB));
+    // phase: a sine LFO at 90 degrees starts at its peak, so the first few ms are already quiet with a negative amount
+    p = Patch().set ("lfo1On", 1).set ("lfo1Rate", 0.5f).set ("lfo1Phase", 90);
+    slot (p, 0, srcLfo1, "op1Level", -0.9f);
+    CHECK (rmsSec (play (p).mono(), 0.03, 0.06) < 0.3 * rmsSec (ref.mono(), 0.03, 0.06));
+
+    // per-voice sources. Velocity -> filter cutoff: the loud note is brighter (the matrix's own route, env amount 0)
+    p = Patch().set ("op1Wave", waveSaw).set ("out1Dry", 0).set ("out1F1", 1).set ("flt1Cutoff", 300);
+    slot (p, 0, srcVelocity, "flt1Cutoff", 0.5f);
+    CHECK (magAt (play (p, 57, 127).mono(), kA, kB, 1760) > 3 * magAt (play (p, 57, 10).mono(), kA, kB, 1760));
+    // ...and per voice: two notes at once, Key -> op 1 level with a negative amount: the low note gets louder than the high one
+    p = Patch();
+    slot (p, 0, srcKey, "op1Level", -0.9f);
+    auto two = render (p, 563, { on (1, 36), on (1, 96) }).mono();
+    Patch flat2;
+    auto two0 = render (flat2, 563, { on (1, 36), on (1, 96) }).mono();
+    const double lowGain = magAt (two, kA, kB, noteToHz (36)) / magAt (two0, kA, kB, noteToHz (36));
+    const double highGain = magAt (two, kA, kB, noteToHz (96)) / magAt (two0, kA, kB, noteToHz (96));
+    CHECKF (lowGain > 0.9 && highGain < 0.5, "key tracking per voice: low x%g high x%g", lowGain, highGain);
+    // an envelope as a source: op 1's amp envelope (sustain 0.8) -> pan: the sustain sits to the right
+    p = Patch();
+    slot (p, 0, srcOpAmpEnv1, "op1Pan", 1.0f);
+    auto st = play (p);
+    CHECK (rms (st.R, kA, kB) > 3 * rms (st.L, kA, kB));
+    // the mod wheel -> level (amount -1): moving the wheel to 1 mutes the note
+    p = Patch();
+    slot (p, 0, srcModWheel, "op1Level", -1.0f);
+    auto r = render (p, 563, { on (1, 69), { 300, [] (SynthEngine& e) { e.setModWheel (1.0); } } });
+    m = r.mono();
+    CHECK (rmsSec (m, 0.5, 0.7) > 0.05 && rmsSec (m, 1.2, 1.4) < 1e-3);
+    // two slots on one destination add up: +0.5 and -0.5 from the same source cancel
+    p = Patch();
+    slot (p, 0, srcModWheel, "op1Level", 0.5f);
+    slot (p, 1, srcModWheel, "op1Level", -0.5f);
+    r = render (p, 563, { on (1, 69), { 300, [] (SynthEngine& e) { e.setModWheel (1.0); } } });
+    CHECK (std::abs (rmsSec (r.mono(), 1.2, 1.4) - rmsSec (ref.mono(), 1.2, 1.4)) < 1e-3);
+    // a global destination: the wheel at 1 -> portamento time at full range (5 s), so a legato glide is still near its start after 0.5 s
+    p = Patch().set ("voiceMode", modeLegato).set ("portaOn", 1).set ("portaTime", 0.1f);
+    slot (p, 0, srcModWheel, "portaTime", 1.0f);
+    r = render (p, 563, { { 0, [] (SynthEngine& e) { e.setModWheel (1.0); } }, on (1, 57), on (188, 69) });
+    const double fMid = zeroCrossFreq (r.mono(), (size_t) (0.95 * kSr), (size_t) (1.0 * kSr));
+    CHECKF (fMid < 260, "global mod: glide mid %g Hz", fMid);
+    // the LFO value reaches the stats
+    {
+        Patch q2 = Patch().set ("lfo1On", 1).set ("lfo1Rate", 1).set ("lfo1Wave", lfoSquare);
+        auto holder = std::make_unique<ModelHolder> (q2.model);
+        auto eng = std::make_unique<SynthEngine>();
+        eng->setParamValues (q2.v.data()); eng->prepare (kSr); eng->setModel (&holder->model); eng->settleParams();
+        std::array<float, 128> L {}, R {};
+        eng->render (L.data(), R.data(), 128);
+        CHECK (std::abs (eng->lfoValue (0)) > 0.99 && eng->lfoValue (1) == 0.0);
+    }
+    // no clicks: an LFO on the cutoff at 8 Hz, deep, leaves no step larger than the waveform's own
+    p = Patch().set ("op1Wave", waveSaw).set ("out1Dry", 0).set ("out1F1", 1).set ("flt1Cutoff", 800).set ("flt1Reso", 0.6f)
+               .set ("lfo1On", 1).set ("lfo1Rate", 8);
+    slot (p, 0, srcLfo1, "flt1Cutoff", 0.6f);
+    m = play (p, 45).mono();
+    CHECKF (maxStep (m, kA, kB) < 3.0 * maxStep (play (Patch().set ("op1Wave", waveSaw), 45).mono(), kA, kB), "lfo cutoff steps %g", maxStep (m, kA, kB));
+}
 } // namespace
 
 // Every factory preset renders a full note (on, hold, off, release, voice end) with finite, non-silent output.
@@ -591,6 +739,7 @@ int runEngineTests()
     step ("filters", filterTests);
     step ("voices", voiceTests);
     step ("quality", qualityTests);
+    step ("LFOs + mod matrix", modulationTests);
     step ("factory presets", factoryPresetTests);
     return failures;
 }

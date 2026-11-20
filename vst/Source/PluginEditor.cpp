@@ -393,8 +393,9 @@ void EightBallEditor::timerCallback()
     if (! on.isEmpty() || ! off.isEmpty())
         browser.emitEventIfBrowserIsVisible ("notes", makeObject ({ { "on", on }, { "off", off } }));
 
-    juce::Array<juce::var> ops;
+    juce::Array<juce::var> ops, lfos;
     for (int k = 0; k < kNumOps; ++k) ops.add (juce::String (processor.statOpActivity[(size_t) k].load(), 4).getDoubleValue());
+    for (int l = 0; l < kNumLfos; ++l) lfos.add (juce::String (processor.statLfo[(size_t) l].load(), 3).getDoubleValue());
     browser.emitEventIfBrowserIsVisible ("stats", makeObject ({
         { "voices",   processor.statVoices.load() },
         { "peak",     processor.statPeak.exchange (0.0f) },
@@ -403,5 +404,6 @@ void EightBallEditor::timerCallback()
         { "bpm",      processor.statBpm.load() },
         { "ops",      ops },
         { "active",   processor.statActiveMask.load() },
+        { "lfo",      lfos },
     }));
 }

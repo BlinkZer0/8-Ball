@@ -223,6 +223,7 @@ void EightBallProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::M
         if (engine.opActive (k)) mask |= 1 << k;
     }
     statActiveMask.store (mask);
+    for (int l = 0; l < kNumLfos; ++l) statLfo[(size_t) l].store ((float) engine.lfoValue (l));
 }
 
 //==============================================================================

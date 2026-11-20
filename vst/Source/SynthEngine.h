@@ -21,6 +21,14 @@
 //  are smoothed (about 5 ms) in their normalised domain, so no knob steps.
 //  2x oversampling (a toggle) runs the whole voice path at twice the rate and
 //  decimates the voice sum with a polyphase half-band filter.
+//
+//  Modulation (the 16-slot mod matrix) adds to a parameter's normalised value:
+//  offset = source x amount, clamped to 0..1, then mapped like the knob. The
+//  four LFOs are global oscillators (free-running or locked to the song
+//  position when synced); each voice fades an LFO in over its Delay time.
+//  Sources that differ per voice (envelopes, velocity, key, the LFOs with
+//  their fade) are applied per voice to the operator, grid and filter
+//  parameters; the wheel, aftertouch and bend to everything else as well.
 // ============================================================================
 #include <limits>
 #include "dsp/Common.h"
@@ -80,12 +88,34 @@ struct Voice
     int velocity = 0;
     double velN = 0;
     uint64_t age = 0;
+    double timeOn = 0;                      // seconds since the note started (LFO delay)
     bool held = false, sustained = false, alive = false;
     double pitch = 60, glideFrom = 60, glideTo = 60, glidePos = 1;
     VoiceCtl cur;
     bool snap = true;
+    // per-voice modulated parameter values (mod matrix), valid for this chunk
+    std::array<int, kNumModSlots> ovParam {};
+    std::array<double, kNumModSlots> ovVal {};
+    int numOv = 0;
 
     bool active() const { return alive; }
+};
+
+struct LfoState
+{
+    double phase = 0;      // cycles (unbounded)
+    double hold = 0;       // sample & hold value
+    long long cycle = -1;  // which cycle the hold belongs to
+    double value = 0;      // this chunk's output, -1..1 (depth applied)
+};
+
+// One active mod slot, resolved once per chunk
+struct ModSlot
+{
+    int dst = -1;          // parameter index
+    int src = srcNone;
+    double amt = 0;
+    bool perVoice = false; // the destination is an operator / grid / filter parameter
 };
 
 class SynthEngine
@@ -100,7 +130,7 @@ public:
             plog[(size_t) i] = d.log;
             psmooth[(size_t) i] = d.kind == Kind::Float;
             raw[(size_t) i] = std::numeric_limits<float>::quiet_NaN();   // so the first value always applies
-            val[(size_t) i] = d.def;
+            val[(size_t) i] = base[(size_t) i] = d.def;
             targetNorm[(size_t) i] = normCur[(size_t) i] = paramToNorm (d, d.def);
         }
         model = &defaultModel;
@@ -114,6 +144,7 @@ public:
         for (int w = 0; w < 5; ++w) (void) starterTable (w);   // build the starter tables now, not on the audio thread
         rng.seed (0x2545F491u);
         for (auto& v : voices) v = Voice {};
+        for (auto& l : lfo) l = LfoState {};
         hbL.reset(); hbR.reset();
         masterGain = val[master];
         panic();
@@ -129,7 +160,7 @@ public:
             if (v == raw[(size_t) i]) continue;
             raw[(size_t) i] = v;
             if (psmooth[(size_t) i]) targetNorm[(size_t) i] = paramToNorm (t[(size_t) i], v);
-            else { val[(size_t) i] = v; normCur[(size_t) i] = targetNorm[(size_t) i] = paramToNorm (t[(size_t) i], v); }
+            else { val[(size_t) i] = base[(size_t) i] = v; normCur[(size_t) i] = targetNorm[(size_t) i] = paramToNorm (t[(size_t) i], v); }
         }
     }
     // Snap every smoothed parameter to its target (preset load, tests)
@@ -137,7 +168,7 @@ public:
     {
         const auto& t = paramTable();
         for (int i = 0; i < kNumParams; ++i)
-            if (psmooth[(size_t) i]) { normCur[(size_t) i] = targetNorm[(size_t) i]; val[(size_t) i] = paramFromNorm (t[(size_t) i], normCur[(size_t) i]); }
+            if (psmooth[(size_t) i]) { normCur[(size_t) i] = targetNorm[(size_t) i]; val[(size_t) i] = base[(size_t) i] = paramFromNorm (t[(size_t) i], normCur[(size_t) i]); }
         updateActiveOps();
     }
 
@@ -145,11 +176,13 @@ public:
     void setModel (const Model* m) { model = m != nullptr ? m : &defaultModel; }
     const Model& currentModel() const { return *model; }
 
+    // Called once per host block, before render(): tempo and song position (synced LFOs lock to it while playing)
     void setTransport (double bpmIn, double ppqIn, bool playingIn)
     {
         bpm = bpmIn > 0 ? bpmIn : 120.0;
         ppqAtBlock = ppqIn;
         playing = playingIn;
+        blockPos = 0;
     }
 
     //==========================================================================
@@ -262,6 +295,8 @@ public:
         {
             const int n = std::min (kChunk, numSamples - pos);
             smoothParams();
+            updateLfos (n / sr);
+            updateModSlots();
             updateActiveOps();
             if (os)
             {
@@ -300,6 +335,7 @@ public:
             }
             masterGain = g;
             pos += n;
+            blockPos += n;
         }
     }
 
@@ -318,11 +354,21 @@ public:
     }
     bool opActive (int k) const { return activeOp[(size_t) k]; }
     double paramValue (int i) const { return val[(size_t) i]; }
+    // the LFOs' current outputs (-1..1, depth applied; 0 when off), for the UI
+    double lfoValue (int l) const { return lfo[(size_t) l].value; }
     static int latencySamples (bool os) { return os ? HalfbandState::kLatency2x : 0; }
 
 private:
     static int clampi (int v, int lo, int hi) { return v < lo ? lo : (v > hi ? hi : v); }
+    // unmodulated (global) parameter values
     double op (int k, int field) const { return val[(size_t) opParam (k, field)]; }
+    // a voice's view of a parameter: the mod matrix's per-voice result, or the global value
+    double pv (const Voice& v, int i) const
+    {
+        for (int j = 0; j < v.numOv; ++j) if (v.ovParam[(size_t) j] == i) return v.ovVal[(size_t) j];
+        return val[(size_t) i];
+    }
+    double opv (const Voice& v, int k, int field) const { return pv (v, opParam (k, field)); }
 
     void pushKey (int note) { removeKey (note); if (keyCount < 128) keys[(size_t) keyCount++] = note; }
     void removeKey (int note)
@@ -361,6 +407,7 @@ private:
         v.velocity = vel;
         v.velN = vel / 127.0;
         v.age = ++ageCounter;
+        v.timeOn = 0;
         v.held = true;
         v.sustained = false;
         v.alive = true;
@@ -382,7 +429,163 @@ private:
             if (d == 0.0) continue;
             if (std::abs (d) < 1e-5) normCur[(size_t) i] = targetNorm[(size_t) i];
             else normCur[(size_t) i] += d * paramSmooth;
-            val[(size_t) i] = paramFromNorm (t[(size_t) i], normCur[(size_t) i]);
+            val[(size_t) i] = base[(size_t) i] = paramFromNorm (t[(size_t) i], normCur[(size_t) i]);
+        }
+    }
+
+    // ---- LFOs (global) -----------------------------------------------------------
+    double lfoShapeValue (int l, int wave, double p) const
+    {
+        switch (wave)
+        {
+            case lfoSine:     return std::sin (kTwoPi * p);
+            case lfoTriangle: return p < 0.25 ? 4.0 * p : (p < 0.75 ? 2.0 - 4.0 * p : 4.0 * p - 4.0);
+            case lfoSaw:      return 2.0 * p - 1.0;
+            case lfoSquare:   return p < 0.5 ? 1.0 : -1.0;
+            case lfoSampleHold: return lfo[(size_t) l].hold;
+            default:
+            {
+                const auto& s = model->lfoShapes[(size_t) l].pts;
+                const double x = p * kLfoShapePoints;
+                const int i0 = (int) x, i1 = (i0 + 1) % kLfoShapePoints;
+                const double f = x - i0;
+                return s[(size_t) (i0 % kLfoShapePoints)] + (s[(size_t) i1] - s[(size_t) (i0 % kLfoShapePoints)]) * f;
+            }
+        }
+    }
+
+    void updateLfos (double chunkSec)
+    {
+        for (int l = 0; l < kNumLfos; ++l)
+        {
+            auto& L = lfo[(size_t) l];
+            auto lp = [this, l] (int field) { return val[(size_t) lfoParam (l, field)]; };
+            if (lp (hOn) < 0.5) { L.value = 0; L.phase = 0; L.cycle = -1; continue; }
+            const bool sync = lp (hSync) >= 0.5;
+            double hz;
+            if (sync)
+            {
+                const double beats = kLfoDivBeats[clampi ((int) lp (hDiv), 0, kNumLfoDivs - 1)];
+                hz = (bpm / 60.0) / beats;
+                if (playing)   // lock to the song position
+                    L.phase = (ppqAtBlock + (blockPos / sr) * (bpm / 60.0)) / beats;
+                else
+                    L.phase += hz * chunkSec;
+            }
+            else
+            {
+                hz = lp (hRate);
+                L.phase += hz * chunkSec;
+            }
+            if (L.phase > 1e9) L.phase -= 1e9;   // keep the accumulator in range after days of running
+            const double total = L.phase + lp (hPhase) / 360.0;
+            const long long cyc = (long long) std::floor (total);
+            if (cyc != L.cycle) { L.cycle = cyc; L.hold = rng.bi(); }
+            const double p = total - (double) cyc;
+            L.value = lfoShapeValue (l, (int) lp (hWave), p) * lp (hDepth);
+        }
+    }
+
+    // ---- mod matrix -------------------------------------------------------------
+    static bool perVoiceParam (int i) { return i >= op1Wave && i <= fltLast; }
+
+    // Resolves the active slots; applies the global sources to the non-voice destinations.
+    void updateModSlots()
+    {
+        const auto& t = paramTable();
+        const auto& dstMap = modDestParams();
+        // restore what the last chunk modulated globally
+        for (int j = 0; j < numGlobalMod; ++j) { const int i = globalModParam[(size_t) j]; val[(size_t) i] = base[(size_t) i]; }
+        numGlobalMod = 0;
+        numSlots = 0;
+        std::array<double, kNumModSlots> gOff {};
+        for (int s = 0; s < kNumModSlots; ++s)
+        {
+            if (val[(size_t) modParam (s, mOn)] < 0.5) continue;
+            const int src = (int) val[(size_t) modParam (s, mSrc)];
+            const int dsel = (int) val[(size_t) modParam (s, mDst)];
+            const double amt = val[(size_t) modParam (s, mAmt)];
+            if (src <= srcNone || dsel <= 0 || dsel >= (int) dstMap.size() || std::abs (amt) < 1e-6) continue;
+            ModSlot& m = slots[(size_t) numSlots++];
+            m.dst = dstMap[(size_t) dsel];
+            m.src = src;
+            m.amt = amt;
+            m.perVoice = perVoiceParam (m.dst);
+            if (! m.perVoice)
+            {
+                // global destination: only the global sources count
+                int j = 0;
+                for (; j < numGlobalMod; ++j) if (globalModParam[(size_t) j] == m.dst) break;
+                if (j == numGlobalMod) { globalModParam[(size_t) numGlobalMod++] = m.dst; gOff[(size_t) j] = 0; }
+                gOff[(size_t) j] += globalSource (src) * amt;
+            }
+        }
+        for (int j = 0; j < numGlobalMod; ++j)
+        {
+            const int i = globalModParam[(size_t) j];
+            val[(size_t) i] = paramFromNorm (t[(size_t) i], normCur[(size_t) i] + gOff[(size_t) j]);
+        }
+    }
+
+    double globalSource (int src) const
+    {
+        if (src >= srcLfo1 && src <= srcLfoLast) return lfo[(size_t) (src - srcLfo1)].value;
+        switch (src)
+        {
+            case srcModWheel:   return wheel;
+            case srcAftertouch: return aftertouch;
+            case srcPitchBend:  return bend;
+            default:            return 0.0;   // per-voice sources have no global value
+        }
+    }
+
+    // A source as one voice sees it. Envelopes: amplitude and filter envelopes 0..1, pitch and
+    // mod-index envelopes -1..1 (their level 0.5 is neutral). Key: -1 at C1 .. +1 at C9 (C4 = 0).
+    double voiceSource (const Voice& v, const std::array<double, kNumEnvs>& e, int src) const
+    {
+        if (src >= srcLfo1 && src <= srcLfoLast)
+        {
+            const int l = src - srcLfo1;
+            const double delay = val[(size_t) lfoParam (l, hDelay)];
+            const double fade = delay > 1e-4 ? clampd (v.timeOn / delay, 0.0, 1.0) : 1.0;
+            return lfo[(size_t) l].value * fade;
+        }
+        if (src >= srcOpAmpEnv1 && src <= srcOpAmpEnvLast)     return e[(size_t) opEnvIndex (src - srcOpAmpEnv1, envAmp)];
+        if (src >= srcOpPitchEnv1 && src <= srcOpPitchEnvLast) return 2.0 * e[(size_t) opEnvIndex (src - srcOpPitchEnv1, envPitch)] - 1.0;
+        if (src >= srcOpModEnv1 && src <= srcOpModEnvLast)     return 2.0 * e[(size_t) opEnvIndex (src - srcOpModEnv1, envMod)] - 1.0;
+        if (src >= srcFltCutEnv1 && src <= srcFltCutEnvLast)   return e[(size_t) fltEnvIndex (src - srcFltCutEnv1, fenvCutoff)];
+        if (src >= srcFltLvlEnv1 && src <= srcFltLvlEnvLast)   return e[(size_t) fltEnvIndex (src - srcFltLvlEnv1, fenvLevel)];
+        switch (src)
+        {
+            case srcVelocity:   return v.velN;
+            case srcModWheel:   return wheel;
+            case srcAftertouch: return aftertouch;
+            case srcPitchBend:  return bend;
+            case srcKey:        return clampd ((v.pitch - 60.0) / 48.0, -1.0, 1.0);
+            default:            return 0.0;
+        }
+    }
+
+    // The per-voice destinations for this chunk
+    void updateVoiceMod (Voice& v, const std::array<double, kNumEnvs>& e)
+    {
+        v.numOv = 0;
+        if (numSlots == 0) return;
+        const auto& t = paramTable();
+        std::array<double, kNumModSlots> off {};
+        for (int s = 0; s < numSlots; ++s)
+        {
+            const auto& m = slots[(size_t) s];
+            if (! m.perVoice) continue;
+            int j = 0;
+            for (; j < v.numOv; ++j) if (v.ovParam[(size_t) j] == m.dst) break;
+            if (j == v.numOv) { v.ovParam[(size_t) v.numOv++] = m.dst; off[(size_t) j] = 0; }
+            off[(size_t) j] += voiceSource (v, e, m.src) * m.amt;
+        }
+        for (int j = 0; j < v.numOv; ++j)
+        {
+            const int i = v.ovParam[(size_t) j];
+            v.ovVal[(size_t) j] = paramFromNorm (t[(size_t) i], normCur[(size_t) i] + off[(size_t) j]);
         }
     }
 
@@ -450,6 +653,7 @@ private:
             const auto& spec = M.envs[(size_t) i];
             e[(size_t) i] = v.env[(size_t) i].advance (spec, spec.sync ? chunkSec * beatsPerSec : chunkSec);
         }
+        v.timeOn += chunkSec;
 
         // glide
         if (v.glidePos < 1)
@@ -459,6 +663,9 @@ private:
         }
         const double bendSemis = bend * val[bendRange];
 
+        // the mod matrix's per-voice results (read through opv / pv below)
+        updateVoiceMod (v, e);
+
         bool anyAlive = false;
         for (int a = 0; a < numActive; ++a)
         {
@@ -467,20 +674,20 @@ private:
             const auto& amp = v.env[(size_t) opEnvIndex (k, envAmp)];
             if (amp.active()) anyAlive = true;
             const double ampLvl = amp.finished() ? 0.0 : e[(size_t) opEnvIndex (k, envAmp)];
-            const double pitchSemis = (2.0 * e[(size_t) opEnvIndex (k, envPitch)] - 1.0) * op (k, fPitchEnvAmt);
-            C.modScale = std::max (0.0, 1.0 + (2.0 * e[(size_t) opEnvIndex (k, envMod)] - 1.0) * op (k, fModEnvAmt));
+            const double pitchSemis = (2.0 * e[(size_t) opEnvIndex (k, envPitch)] - 1.0) * opv (v, k, fPitchEnvAmt);
+            C.modScale = std::max (0.0, 1.0 + (2.0 * e[(size_t) opEnvIndex (k, envMod)] - 1.0) * opv (v, k, fModEnvAmt));
 
             double hz;
             if (op (k, fFixed) >= 0.5)
-                hz = op (k, fHz) * std::pow (2.0, (op (k, fFine) / 100.0 + pitchSemis) / 12.0);
+                hz = opv (v, k, fHz) * std::pow (2.0, (opv (v, k, fFine) / 100.0 + pitchSemis) / 12.0);
             else
             {
-                const double tracked = 60.0 + (v.pitch + bendSemis - 60.0) * op (k, fKeyTrack);
-                hz = op (k, fRatio) * noteToHz (tracked + op (k, fFine) / 100.0 + pitchSemis);
+                const double tracked = 60.0 + (v.pitch + bendSemis - 60.0) * opv (v, k, fKeyTrack);
+                hz = opv (v, k, fRatio) * noteToHz (tracked + opv (v, k, fFine) / 100.0 + pitchSemis);
             }
             const double dt = std::min (hz / rate, 0.49);
             const int subs = clampi ((int) op (k, fUnison), 1, kMaxUnison);
-            const double detune = op (k, fDetune), spread = op (k, fSpread), pan = op (k, fPan);
+            const double detune = opv (v, k, fDetune), spread = opv (v, k, fSpread), pan = opv (v, k, fPan);
             for (int u = 0; u < subs; ++u)
             {
                 const double pos = subs > 1 ? 2.0 * u / (subs - 1) - 1.0 : 0.0;
@@ -490,29 +697,29 @@ private:
             }
             v.mip[(size_t) k] = Wavetable::levelFor (dt);
             const double velCurve = 0.05 + 0.95 * std::pow (v.velN, 1.5);
-            const double velGain = 1.0 + op (k, fVel) * (velCurve - 1.0);
-            C.gain = op (k, fLevel) * velGain * ampLvl / std::sqrt ((double) subs);
+            const double velGain = 1.0 + opv (v, k, fVel) * (velCurve - 1.0);
+            C.gain = opv (v, k, fLevel) * velGain * ampLvl / std::sqrt ((double) subs);
             const bool audible = audibleOp[(size_t) k];
-            for (int j = 0; j < kNumOutputs; ++j) C.send[(size_t) j] = audible ? val[(size_t) outParam (k, j)] : 0.0;
+            for (int j = 0; j < kNumOutputs; ++j) C.send[(size_t) j] = audible ? pv (v, outParam (k, j)) : 0.0;
         }
         v.alive = anyAlive;
 
         for (int c = 0; c < numPm; ++c)
         {
             const int idx = pmList[(size_t) c];
-            const double d = val[(size_t) (pm11 + idx)];
+            const double d = pv (v, pm11 + idx);
             T.pm[(size_t) idx] = d * d * kMaxPmTurns;
         }
         for (int c = 0; c < numRm; ++c)
         {
             const int idx = rmList[(size_t) c];
-            T.rm[(size_t) idx] = val[(size_t) (rm11 + idx)];
+            T.rm[(size_t) idx] = pv (v, rm11 + idx);
         }
 
         for (int f = 0; f < kNumFilters; ++f)
         {
             auto& F = T.flt[(size_t) f];
-            auto fp = [this, f] (int field) { return val[(size_t) fltParam (f, field)]; };
+            auto fp = [this, &v, f] (int field) { return pv (v, fltParam (f, field)); };
             const double cutEnv = e[(size_t) fltEnvIndex (f, fenvCutoff)];
             const double oct = fp (gEnvAmt) * kFltEnvOctaves * cutEnv
                              + fp (gKeyTrack) * (v.pitch - 60.0) / 12.0
@@ -761,8 +968,14 @@ private:
     const Model* model = nullptr;
 
     std::array<float, kNumParams> raw {};
-    std::array<double, kNumParams> targetNorm {}, normCur {}, val {};
+    std::array<double, kNumParams> targetNorm {}, normCur {}, val {}, base {};   // val = base + global modulation
     std::array<bool, kNumParams> plog {}, psmooth {};
+
+    std::array<LfoState, kNumLfos> lfo;
+    std::array<ModSlot, kNumModSlots> slots;
+    int numSlots = 0;
+    std::array<int, kNumModSlots> globalModParam {};
+    int numGlobalMod = 0;
 
     std::array<bool, kNumOps> activeOp {}, audibleOp {};
     std::array<int, kNumOps> activeList {};
@@ -781,6 +994,7 @@ private:
     double sr = 48000, masterGain = 0.7, masterSmooth = 0.001, paramSmooth = 0.5;
     double bend = 0, wheel = 0, aftertouch = 0;
     double bpm = 120, ppqAtBlock = 0;
+    int blockPos = 0;        // samples rendered since setTransport()
     bool playing = false;
     int lastNote = -1;
     double lastPitch = 60;

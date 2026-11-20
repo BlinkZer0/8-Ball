@@ -19,6 +19,11 @@
       m.envs[`op${k}Pitch`] = { points: [[0, 0.5, 0], [1, 0.5, 0]], sustain: 1, loopStart: -1, loopEnd: -1, sync: false };
       m.envs[`op${k}Mod`] = { points: [[0, 0.5, 0], [1, 0.5, 0]], sustain: 1, loopStart: -1, loopEnd: -1, sync: false };
     }
+    for (let f = 1; f <= 3; f++) {
+      m.envs[`flt${f}Cutoff`] = { points: [[0, 0, 0], [0.005, 1, 0], [0.405, 0.5, -0.5], [0.805, 0, -0.5]], sustain: 2, loopStart: -1, loopEnd: -1, sync: false };
+      m.envs[`flt${f}Level`] = { points: [[0, 1, 0], [1, 1, 0]], sustain: 1, loopStart: -1, loopEnd: -1, sync: false };
+    }
+    for (let l = 1; l <= 4; l++) m.lfoShapes[String(l)] = Array.from({ length: 64 }, (_, i) => Math.round(Math.sin(2 * Math.PI * i / 64) * 1000) / 1000);
     return m;
   };
   window.__JUCE__ = {
@@ -37,7 +42,7 @@
           toUi('params', Object.fromEntries(PARAM_DEFS.map(d => [d.id, d.def])));
           toUi('model', defaultModel());
           toUi('learn', { armed: '', map: {} });
-          toUi('stats', { voices: 0, peak: 0, sustain: false, modWheel: 0, bpm: 120, ops: [0, 0, 0, 0, 0, 0, 0, 0], active: 1 });
+          toUi('stats', { voices: 0, peak: 0, sustain: false, modWheel: 0, bpm: 120, ops: [0, 0, 0, 0, 0, 0, 0, 0], active: 1, lfo: [0.5, 0, 0, 0] });
         }
       },
     },
@@ -55,10 +60,10 @@
     check(errors.length === 0, `no script errors: ${errors.join(' | ') || 'none'}`);
     check(sent.some(s => s.ev === 'uiReady'), 'UI sent uiReady');
     check($('#preset-name').textContent === 'Init', `preset name shown ('${$('#preset-name').textContent}')`);
-    // every operator and matrix parameter has a control; so do the global ones
-    const missing = PARAM_DEFS.filter(d => (/^op\d|^pm\d|^rm\d|^out\d|^(master|poly|voiceMode|portaOn|portaTime|oversample|bendRange)$/.test(d.id))
+    // every operator, matrix, filter, LFO and mod-slot parameter has a control; so do the global ones
+    const missing = PARAM_DEFS.filter(d => (/^op\d|^pm\d|^rm\d|^out\d|^flt|^lfo\d|^mod\d|^(master|poly|voiceMode|portaOn|portaTime|oversample|bendRange)$/.test(d.id))
                                           && !document.querySelector(`[data-param="${d.id}"]`)).map(d => d.id);
-    check(missing.length === 0, `operator / matrix / global params have controls (missing: ${missing.join(', ') || 'none'})`);
+    check(missing.length === 0, `operator / matrix / filter / LFO / mod / global params have controls (missing: ${missing.join(', ') || 'none'})`);
     check($$('.op-strip').length === 8, '8 operator strips');
     check($$('.mx-cell').length === 64 + 64 + 32, `matrix cells: ${$$('.mx-cell').length} (64 PM + 64 ring + 32 output)`);
     check($$('.mx-layout').length >= 10, `${$$('.mx-layout').length} algorithm layouts`);
@@ -133,6 +138,89 @@
     (listeners.params || []).forEach(f => f({ op3Level: 0.25, op2Ratio: 7 }));
     check(/25%/.test($('[data-param="op3Level"] .knob-value').textContent), 'host param change updates a knob');
     check(!/7/.test($('[data-param="op2Ratio"] .knob-value').textContent), 'a knob just edited here ignores the echo for 300 ms');
+
+    // ---- filters page
+    $$('.page-tab').find(t => t.dataset.page === 'filters').click();
+    check($$('.flt-panel').length === 3 && $$('.flt-panel .scr-line').every(p => p.getAttribute('d').length > 50), 'three filter panels draw a response curve');
+    const n4 = sent.length;
+    $('[data-param="fltRouting"] button:nth-child(2)').click();
+    check(sent.slice(n4).some(s => s.ev === 'setParam' && s.data.id === 'fltRouting' && s.data.value === 1), 'routing switch sends setParam fltRouting = 1');
+    check($('.flt-diagram svg').innerHTML.includes('F3') && /F1: op 1|F1: nothing/.test($('.flt-feeds').textContent), 'routing diagram and feed list render');
+    (listeners.params || []).forEach(f => f({ flt1On: 0 }));
+    check($$('.flt-panel')[0].classList.contains('off'), 'filter off dims its panel');
+    (listeners.params || []).forEach(f => f({ flt1On: 1 }));
+    $$('.flt-env-btns .pd-btn')[0].click();
+    check($('.page[data-page="art"]').classList.contains('active') && $('.env-target.on').textContent === 'F1' && $('.env-kinds button.on').textContent === 'CUTOFF',
+          'CUTOFF ENV button opens the editor on filter 1 cutoff');
+
+    // ---- articulators page: the envelope editor
+    const envSvg = $('.env-svg');
+    check(envSvg && $$('.env-pt').length === 4, `editor shows the 4 points of flt1Cutoff (${$$('.env-pt').length})`);
+    $$('.env-target').find(b => b.textContent === 'OP 2').click();
+    check($('.env-target.on').textContent === 'OP 2' && $('.env-kinds button.on').textContent === 'AMP' && $$('.env-pt').length === 4, 'OP 2 target shows its amp envelope');
+    // double-click on the curve adds a point and sends setEnv
+    const er = envSvg.getBoundingClientRect();
+    envSvg.setPointerCapture = () => {};
+    const n5 = sent.length;
+    envSvg.dispatchEvent(new MouseEvent('dblclick', { bubbles: true, clientX: er.left + er.width * 0.6, clientY: er.top + er.height * 0.5 }));
+    const se2 = sent.slice(n5).find(s => s.ev === 'setEnv');
+    check(se2 && se2.data.key === 'op2Amp' && se2.data.env.points.length === 5, 'double-click adds a point and sends setEnv op2Amp with 5 points');
+    check($$('.env-pt').length === 5, 'the editor shows 5 points');
+    // dragging the new point (index 3) sends setEnv with a changed level
+    const pt3 = $$('.env-pt')[3];
+    const pr = pt3.getBoundingClientRect();
+    const n6 = sent.length;
+    const pev = (type, dy) => envSvg.dispatchEvent(new PointerEvent(type, { bubbles: true, clientX: pr.left + 4, clientY: pr.top + 4 + dy, pointerId: 3, button: 0, buttons: 1 }));
+    pt3.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, clientX: pr.left + 4, clientY: pr.top + 4, pointerId: 3, button: 0, buttons: 1 }));
+    pev('pointermove', 20); pev('pointerup', 20);
+    const se3 = sent.slice(n6).filter(s => s.ev === 'setEnv').pop();
+    check(se3 && se3.data.env.points[3][1] < se2.data.env.points[3][1], 'dragging a point down lowers its level and sends setEnv');
+    // the quick ADSR knobs follow (the op 2 envelope is no longer a plain ADSR: 5 points)
+    check($$('.op-strip')[1].querySelector('.kgroup.env').classList.contains('na'), 'the op 2 quick ADSR shows "custom shape" for a 5-point envelope');
+    // sustain via the toolbar on the selected point (the one just dragged)
+    const n7 = sent.length;
+    $$('.env-btn').find(b => b.textContent === 'SUSTAIN').click();
+    const se4 = sent.slice(n7).find(s => s.ev === 'setEnv');
+    check(se4 && se4.data.env.sustain === 3, `SUSTAIN moves the sustain to the selected point (sustain = ${se4 && se4.data.env.sustain})`);
+    // a shape preset replaces the envelope
+    const shapes = $('.env-shapes');
+    shapes.value = 'Pluck'; shapes.dispatchEvent(new Event('change'));
+    const se5 = sent.filter(s => s.ev === 'setEnv').pop();
+    check(se5 && se5.data.env.points.length === 3 && se5.data.env.sustain === -1, 'shape "Pluck" sends a 3-point one-shot envelope');
+
+    // ---- LFOs
+    check($$('.lfo-strip').length === 4, '4 LFO strips');
+    const n8 = sent.length;
+    const lfoWave = $('[data-param="lfo1Wave"]');
+    lfoWave.value = '5'; lfoWave.dispatchEvent(new Event('change'));
+    check(sent.slice(n8).some(s => s.ev === 'setParam' && s.data.id === 'lfo1Wave' && s.data.value === 5), 'LFO wave select sends setParam');
+    const shapeSvg = $$('.lfo-shape')[0].querySelector('svg');
+    check(!$$('.lfo-shape')[0].classList.contains('ro'), 'Drawn wave makes the shape screen editable');
+    const sr = shapeSvg.getBoundingClientRect();
+    shapeSvg.setPointerCapture = () => {};
+    const n9 = sent.length;
+    shapeSvg.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, clientX: sr.left + 5, clientY: sr.top + 5, pointerId: 4, button: 0, buttons: 1 }));
+    shapeSvg.dispatchEvent(new PointerEvent('pointermove', { bubbles: true, clientX: sr.left + sr.width / 2, clientY: sr.top + sr.height - 5, pointerId: 4, button: 0, buttons: 1 }));
+    shapeSvg.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, clientX: sr.left + sr.width / 2, clientY: sr.top + sr.height - 5, pointerId: 4, button: 0 }));
+    const sl = sent.slice(n9).find(s => s.ev === 'setLfoShape');
+    check(sl && sl.data.lfo === 0 && sl.data.shape.length === 64 && sl.data.shape.slice(0, 8).some(v => v > 0.5) && sl.data.shape[32] < -0.5,
+          `drawing in the shape screen sends setLfoShape with 64 points (${sl && sl.data.shape.slice(0, 4)} … ${sl && sl.data.shape[32]})`);
+    check(parseFloat($$('.lfo-meter-fill')[0].style.height) > 0, 'LFO meter shows the stats value');
+
+    // ---- mod matrix
+    check($$('.mod-row').length === 16, '16 mod slots');
+    const dstSel = $('[data-param="mod1Dst"]');
+    check(dstSel.querySelectorAll('optgroup').length > 10 && dstSel.options.length === PARAM_BY_ID.mod1Dst.choices.length, `destination list grouped (${dstSel.querySelectorAll('optgroup').length} groups, ${dstSel.options.length} entries)`);
+    const n10 = sent.length;
+    const srcSel = $('[data-param="mod1Src"]');
+    srcSel.value = '1'; srcSel.dispatchEvent(new Event('change'));
+    dstSel.value = String(MOD_DEST_IDS.indexOf('flt1Cutoff')); dstSel.dispatchEvent(new Event('change'));
+    (listeners.params || []).forEach(f => f({ mod1Amt: 0.5 }));
+    check(sent.slice(n10).filter(s => s.ev === 'setParam' && /^mod1(Src|Dst)$/.test(s.data.id)).length === 2, 'source / destination selects send setParam');
+    check($$('.mod-row')[0].classList.contains('active') && /\+50%/.test($$('.mod-val')[0].textContent), 'an active slot is highlighted with its amount');
+    check($('[data-param="flt1Cutoff"]').classList.contains('modded'), 'the destination knob gets a modulation marker');
+    check($('#art-led').classList.contains('on'), 'the ARTICULATORS tab LED lights for an active slot');
+    $$('.page-tab').find(t => t.dataset.page === 'ops').click();
 
     // leave the page the screenshot run asked for
     if (window.__uiTestPage) { const t = $$('.page-tab').find(x => x.dataset.page === window.__uiTestPage); if (t) t.click(); }

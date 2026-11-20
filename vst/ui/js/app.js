@@ -81,7 +81,8 @@
 
   function addKnob(parent, id, opts) {
     const k = new Knob(PARAM_BY_ID[id], values[id], (v) => setParam(id, v), (begin) => gestureFn(id, begin), opts);
-    knobs[id] = k;
+    if (knobs[id]) (bound[id] = bound[id] || []).push(k);   // a second knob for the same parameter (e.g. an envelope amount)
+    else knobs[id] = k;
     k.el.dataset.param = id;
     parent.appendChild(k.el);
     return k;
@@ -401,7 +402,11 @@
     row.appendChild(g3);
     // quick amplitude envelope (edits the multi-point envelope's four points; the full editor is on the Articulators page)
     const g4 = el('div', 'kgroup env');
-    g4.appendChild(el('span', 'kgroup-label', 'AMP ENV'));
+    const envLabel = el('button', 'kgroup-label link', 'AMP ENV ›');
+    envLabel.type = 'button';
+    envLabel.dataset.tip = `Open op ${k + 1}'s amplitude envelope in the editor`;
+    envLabel.addEventListener('click', () => openEnv(`op${k + 1}Amp`));
+    g4.appendChild(envLabel);
     const adsr = {};
     for (const f of ['A', 'D', 'S', 'R']) {
       const kn = new Knob(ADSR_DEFS[f], ADSR_DEFS[f].def, () => sendAdsr(k), null, { size: 'md' });
@@ -425,10 +430,36 @@
     const u = opUi[k];
     const A = u.adsr.A.value, D = u.adsr.D.value, S = u.adsr.S.value, R = u.adsr.R.value;
     const env = { points: [[0, 0, 0], [A, 1, 0], [A + D, S, -0.5], [A + D + R, 0, -0.5]], sustain: 2, loopStart: -1, loopEnd: -1, sync: false };
-    if (model && model.envs) model.envs[`op${k + 1}Amp`] = env;
-    lastLocal[`env:op${k + 1}`] = performance.now();
-    engine.setEnv(`op${k + 1}Amp`, env);
+    setEnvModel(`op${k + 1}Amp`, env, 'ops');
+  }
+
+  // An envelope edited in this UI (the quick ADSR knobs or the editor): keep the local model,
+  // tell the plugin, and refresh the other view of the same envelope.
+  function setEnvModel(key, env, from) {
+    if (!model) model = { waves: {}, envs: {}, lfoShapes: {} };
+    if (!model.envs) model.envs = {};
+    model.envs[key] = env;
+    lastLocal[`env:${key}`] = performance.now();
+    engine.setEnv(key, env);
     if (!presetDirty) { presetDirty = true; renderPresetName(); }
+    if (from !== 'ops') refreshAdsrKnobs(key);
+    if (from !== 'art' && art) art.setModel(model);
+  }
+
+  function refreshAdsrKnobs(key) {
+    const m = /^op(\d)Amp$/.exec(key);
+    if (!m) return;
+    const u = opUi[Number(m[1]) - 1];
+    const e = model.envs[key];
+    const simple = e && e.points && e.points.length === 4 && e.sustain === 2 && e.points[0][0] === 0 && !e.sync;
+    u.g4.classList.toggle('na', !simple);
+    if (simple) {
+      const p = e.points;
+      u.adsr.A.setValue(p[1][0]);
+      u.adsr.D.setValue(Math.max(0.005, p[2][0] - p[1][0]));
+      u.adsr.S.setValue(p[2][1]);
+      u.adsr.R.setValue(Math.max(0.005, p[3][0] - p[2][0]));
+    }
   }
 
   function refreshOps(ids) {
@@ -449,34 +480,55 @@
   }
   refreshers.push(refreshOps);
 
-  // the model (waves, envelopes) from the host: refresh custom waveforms and the quick ADSR knobs
+  // the model (waves, envelopes, LFO shapes) from the host: refresh custom waveforms, the quick ADSR knobs, the editors
   engine.on('model', (m) => {
-    model = m;
     const now = performance.now();
-    for (const u of opUi) {
-      const key = `op${u.k + 1}Amp`;
-      if (lastLocal[`env:op${u.k + 1}`] !== undefined && now - lastLocal[`env:op${u.k + 1}`] < 300) continue;
-      const e = m.envs && m.envs[key];
-      const simple = e && e.points && e.points.length === 4 && e.sustain === 2 && e.points[0][0] === 0;
-      u.g4.classList.toggle('na', !simple);
-      if (simple) {
-        const p = e.points;
-        u.adsr.A.setValue(p[1][0]);
-        u.adsr.D.setValue(Math.max(0.005, p[2][0] - p[1][0]));
-        u.adsr.S.setValue(p[2][1]);
-        u.adsr.R.setValue(Math.max(0.005, p[3][0] - p[2][0]));
-      }
-    }
+    // keep what this UI edited in the last 300 ms (the host echoes it back)
+    if (model && model.envs && m.envs)
+      for (const key in m.envs) if (lastLocal[`env:${key}`] !== undefined && now - lastLocal[`env:${key}`] < 300) m.envs[key] = model.envs[key];
+    if (model && model.lfoShapes && m.lfoShapes)
+      for (const l in m.lfoShapes) if (lastLocal[`lfo:${l}`] !== undefined && now - lastLocal[`lfo:${l}`] < 300) m.lfoShapes[l] = model.lfoShapes[l];
+    model = m;
+    for (const u of opUi) refreshAdsrKnobs(`op${u.k + 1}Amp`);
     refreshOps();
+    art.setModel(model);
   });
 
   // =================================================================== MATRIX =
   const matrix = new MatrixPage($('#matrix-page'), { values, addKnob, setParams, log: logMidi });
 
+  // ================================================================== FILTERS =
+  function openEnv(key) { art.openEnv(key); showPage('art'); }
+  const filters = new FiltersPage($('#filters-page'), { values, addKnob, control, openEnv });
+  refreshers.push((ids) => filters.refresh(ids));
+
+  // ======================================================= ARTICULATORS · LFO =
+  const art = new ArtPage($('#art-page'), {
+    values, addKnob, control, setParam, menu: ctxMenu, log: logMidi,
+    getModel: () => model,
+    setEnv: (key, env) => setEnvModel(key, env, 'art'),
+    setLfoShape: (l, pts) => {
+      if (!model) model = { waves: {}, envs: {}, lfoShapes: {} };
+      if (!model.lfoShapes) model.lfoShapes = {};
+      model.lfoShapes[String(l + 1)] = pts;
+      lastLocal[`lfo:${l + 1}`] = performance.now();
+      engine.setLfoShape(l, pts);
+      if (!presetDirty) { presetDirty = true; renderPresetName(); }
+    },
+  });
+  refreshers.push((ids) => art.refresh(ids));
+  // a marker on every knob an active mod slot drives
+  let moddedIds = new Set();
+  refreshers.push((ids) => {
+    if (ids && ![...ids].some(id => /^mod\d/.test(id))) return;
+    const next = art.modulatedIds();
+    for (const id of moddedIds) if (!next.has(id)) [knobs[id], ...(bound[id] || [])].forEach(c => c && c.el.classList.remove('modded'));
+    for (const id of next) [knobs[id], ...(bound[id] || [])].forEach(c => c && c.el.classList.add('modded'));
+    moddedIds = next;
+  });
+
   // ===================================================== later milestones ====
   const placeholders = {
-    'filters-page': ['FILTERS · milestone 2', 'Three multimode filters (low / band / high-pass, 12 or 24 dB) with cutoff, resonance, drive, key tracking, envelope amount and velocity, routed Parallel, Series 1→2→3 or 1+2→3. The DSP is already in the engine: the output column on the MATRIX page sends each operator to Filter 1–3.'],
-    'art-page': ['ARTICULATORS · LFO · milestone 2', 'Freeform multi-point envelopes for every operator (amplitude, pitch, modulation index) and filter (cutoff, level), 4 global LFOs and the 16-slot mod matrix. The quick AMP ENV knobs on the OPERATORS page edit the amplitude envelopes until the full editor lands here.'],
     'fx-page': ['FX · milestone 3', 'Distortion → Chorus → Phaser → Delay → Reverb → EQ → Compressor / Limiter, each with on/off and mix, drag to reorder.'],
   };
   for (const id in placeholders) {
@@ -506,8 +558,8 @@
   const PAGE_HINTS = {
     ops: 'Drag knobs up / down · Shift or Ctrl = fine · double-click = default · right-click = MIDI learn',
     matrix: 'Row modulates column · diagonal = feedback · drag a cell up / down · double-click = clear it',
-    filters: 'Milestone 2',
-    art: 'Milestone 2',
+    filters: 'Three filters per voice · send operators to them on the MATRIX page · ENV opens the cutoff by up to 5 octaves',
+    art: 'Drag points · drag a segment = curve · double-click = add / delete a point · right-click = sustain, loop · SYNC = beats',
     fx: 'Milestone 3',
     presets: 'Factory presets and the files in your user folder; SAVE AS stores the current sound',
   };
@@ -530,7 +582,7 @@
     for (let k = 0; k < NUM_OPS; k++) for (let j = 0; j < 3; j++) toFilters = toFilters || values[outId(k, j)] > 0;
     $('#matrix-led').classList.toggle('on', cells);
     $('#filters-led').classList.toggle('on', toFilters);
-    $('#art-led').classList.toggle('on', [1, 2, 3, 4].some(l => values[`lfo${l}On`] >= 0.5));
+    $('#art-led').classList.toggle('on', [1, 2, 3, 4].some(l => values[`lfo${l}On`] >= 0.5) || art.modulatedIds().size > 0);
     $('#fx-led').classList.toggle('on', ['dst', 'cho', 'pha', 'dly', 'rev', 'eq', 'cmp'].some(u => values[`${u}On`] >= 0.5));
   }
   refreshers.push(refreshPageLeds);
@@ -604,7 +656,8 @@
   const meterClip = document.querySelector('.meter-clip');
   const sustainLed = $('#sustain-led');
   let clipTimer = 0;
-  engine.on('stats', ({ voices, peak, sustain, modWheel, bpm, ops, active }) => {
+  engine.on('stats', ({ voices, peak, sustain, modWheel, bpm, ops, active, lfo }) => {
+    art.meters(lfo);
     $('#voice-count').textContent = `${voices}/${values.poly | 0}`;
     sustainLed.classList.toggle('on', !!sustain);
     if (typeof modWheel === 'number') wheel.setValue(modWheel);
