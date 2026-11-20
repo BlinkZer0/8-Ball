@@ -694,6 +694,195 @@ void modulationTests()
     m = play (p, 45).mono();
     CHECKF (maxStep (m, kA, kB) < 3.0 * maxStep (play (Patch().set ("op1Wave", waveSaw), 45).mono(), kA, kB), "lfo cutoff steps %g", maxStep (m, kA, kB));
 }
+
+// ---- the FX chain --------------------------------------------------------------
+void fxTests()
+{
+    // a short note: 60 ms of sound, then silence, so echoes and tails stand out
+    auto shortNote = [] (Patch& p, int note = 69, int blocks = 563, double bpm = 120.0)
+    {
+        p.model.envs[opEnvIndex (0, envAmp)] = EnvSpec::adsr (0.003f, 0.05f, 0.0f, 0.05f);
+        return render (p, blocks, { on (1, note), off (10, note) }, bpm);
+    };
+    const char* units[kNumFx] { "dst", "cho", "pha", "dly", "rev", "eq", "cmp" };
+
+    // BYPASS: every unit off (whatever its knobs say) and every unit on with mix 0 is bit-identical to no FX
+    Patch plain;
+    const auto ref = play (plain);
+    for (int u = 0; u < kNumFx; ++u)
+    {
+        Patch p;
+        p.set ((std::string (units[u]) + "On").c_str(), 0);
+        p.set ("dstDrive", 1).set ("choDepth", 1).set ("phaDepth", 1).set ("dlyFeedback", 0.9f).set ("revDecay", 1)
+         .set ("eqLowGain", 18).set ("eqHighCut", 1000).set ("cmpThresh", -60).set ("cmpRatio", 20);
+        CHECKF (maxDiff (play (p), ref) == 0.0, "%s off is not a bypass", units[u]);
+        p.set ((std::string (units[u]) + "On").c_str(), 1).set ((std::string (units[u]) + "Mix").c_str(), 0);
+        CHECKF (maxDiff (play (p), ref) == 0.0, "%s mix 0 is not dry", units[u]);
+    }
+    // every unit on at its defaults renders finite, non-silent audio
+    {
+        Patch p;
+        for (int u = 0; u < kNumFx; ++u) p.set ((std::string (units[u]) + "On").c_str(), 1);
+        auto r = play (p);
+        bool finite = true;
+        for (float s : r.L) finite = finite && std::isfinite (s);
+        CHECK (finite && rms (r.mono(), kA, kB) > 0.02 && r.peak <= 1.0);
+    }
+
+    // distortion: soft drive adds a 3rd harmonic to a sine; tone 0 takes the high harmonics down; every type sounds different
+    Patch p = Patch().set ("dstOn", 1).set ("dstDrive", 0.8f);
+    auto m = play (p).mono();
+    CHECKF (dB (magAt (m, kA, kB, 1320)) - dB (magAt (m, kA, kB, 440)) > -30, "soft 3rd harmonic %g dB", dB (magAt (m, kA, kB, 1320)) - dB (magAt (m, kA, kB, 440)));
+    p.set ("dstTone", 0);
+    auto dark = play (p).mono();
+    CHECK (dB (magAt (dark, kA, kB, 2200)) < dB (magAt (m, kA, kB, 2200)) - 10);
+    p.set ("dstTone", 1);
+    for (int t = 1; t < 4; ++t)
+    {
+        p.set ("dstType", (float) t);
+        CHECKF (maxDiff (play (p), ref) > 1e-3 && maxDiff (play (p), play (Patch().set ("dstOn", 1).set ("dstDrive", 0.8f))) > 1e-3, "distortion type %d", t);
+    }
+    // the level stays in the same ballpark at full drive (no 20 dB jump)
+    p = Patch().set ("dstOn", 1).set ("dstDrive", 1);
+    CHECK (std::abs (dB (rms (play (p).mono(), kA, kB)) - dB (rms (ref.mono(), kA, kB))) < 8);
+
+    // chorus: L and R differ with spread; the level stays; feedback and depth change the sound
+    p = Patch().set ("choOn", 1).set ("choMix", 1).set ("choSpread", 1).set ("choDepth", 0.8f);
+    auto st = play (p);
+    double diff = 0;
+    for (size_t i = kA; i < kB; ++i) diff += std::abs (st.L[i] - st.R[i]);
+    CHECK (diff / (kB - kA) > 0.01);
+    CHECK (std::abs (dB (rms (st.mono(), kA, kB)) - dB (rms (ref.mono(), kA, kB))) < 4);
+    p.set ("choSpread", 0);
+    st = play (p);
+    diff = 0;
+    for (size_t i = kA; i < kB; ++i) diff += std::abs (st.L[i] - st.R[i]);
+    CHECK (diff / (kB - kA) < 1e-6);
+
+    // phaser: a sweeping notch: the 5th harmonic of a saw varies by more than 6 dB over a slow cycle
+    p = Patch().set ("op1Wave", waveSaw).set ("phaOn", 1).set ("phaMix", 1).set ("phaRate", 0.7f).set ("phaDepth", 1);
+    m = play (p, 57).mono();
+    double lo = 1e9, hi = -1e9;
+    for (double t = 0.1; t < 1.4; t += 0.05) { const double v = dB (magAt (m, (size_t) (t * kSr), (size_t) ((t + 0.05) * kSr), 1100)); lo = std::min (lo, v); hi = std::max (hi, v); }
+    CHECKF (hi - lo > 6, "phaser sweep %g dB", hi - lo);
+    p.set ("phaStages", 2).set ("phaFeedback", 0.8f);
+    CHECK (std::isfinite (rms (play (p, 57).mono(), kA, kB)) && play (p, 57).peak <= 1.0);
+
+    // delay: one echo 375 ms after a short note, nothing in between; synced 1/4 at 120 BPM = 500 ms; ping-pong alternates
+    p = Patch().set ("dlyOn", 1).set ("dlyTime", 375).set ("dlyFeedback", 0).set ("dlyMix", 0.5f);
+    auto r = shortNote (p);
+    m = r.mono();
+    const double hit = rmsSec (m, 0.0, 0.06), echo = rmsSec (m, 0.38, 0.44), gap = rmsSec (m, 0.2, 0.3), later = rmsSec (m, 0.8, 1.0);
+    CHECKF (echo > 0.2 * hit && gap < 0.02 * hit && later < 0.02 * hit, "delay hit %g echo %g gap %g later %g", hit, echo, gap, later);
+    p.set ("dlyFeedback", 0.6f);
+    m = shortNote (p).mono();
+    CHECKF (rmsSec (m, 0.755, 0.815) > 0.3 * rmsSec (m, 0.38, 0.44), "delay feedback: 2nd echo");
+    p.set ("dlySync", 1).set ("dlyDiv", 5).set ("dlyFeedback", 0);
+    m = shortNote (p).mono();
+    CHECKF (rmsSec (m, 0.505, 0.565) > 0.2 * hit && rmsSec (m, 0.38, 0.44) < 0.02 * hit, "delay sync 1/4");
+    m = shortNote (p, 69, 563, 240.0).mono();
+    CHECKF (rmsSec (m, 0.255, 0.315) > 0.2 * hit, "delay sync at 240 BPM");
+    p.set ("dlySync", 0).set ("dlyPingPong", 1).set ("dlyFeedback", 0.6f);
+    r = shortNote (p);
+    CHECKF (rms (r.L, (size_t) (0.38 * kSr), (size_t) (0.44 * kSr)) > 3 * rms (r.R, (size_t) (0.38 * kSr), (size_t) (0.44 * kSr)), "ping-pong 1st echo left");
+    CHECKF (rms (r.R, (size_t) (0.755 * kSr), (size_t) (0.815 * kSr)) > 3 * rms (r.L, (size_t) (0.755 * kSr), (size_t) (0.815 * kSr)), "ping-pong 2nd echo right");
+    // tone 0 darkens the echo
+    p = Patch().set ("op1Wave", waveSaw).set ("dlyOn", 1).set ("dlyTime", 375).set ("dlyFeedback", 0).set ("dlyMix", 1).set ("dlyTone", 1);
+    auto bright = shortNote (p, 57).mono();
+    p.set ("dlyTone", 0);
+    auto dull = shortNote (p, 57).mono();
+    CHECK (dB (magAt (dull, (size_t) (0.38 * kSr), (size_t) (0.44 * kSr), 2200)) < dB (magAt (bright, (size_t) (0.38 * kSr), (size_t) (0.44 * kSr), 2200)) - 10);
+
+    // reverb: a tail after the note; more decay = longer tail; off = silence after the note
+    p = Patch().set ("revOn", 1).set ("revMix", 0.5f).set ("revDecay", 0.5f);
+    m = shortNote (p).mono();
+    const double tail0 = rmsSec (m, 0.5, 0.7), tailLong0 = rmsSec (m, 1.2, 1.4);
+    CHECKF (tail0 > 5e-4 && tail0 < 0.1 * rmsSec (m, 0.0, 0.06), "reverb tail %g (hit %g)", tail0, rmsSec (m, 0.0, 0.06));
+    p.set ("revDecay", 1);
+    m = shortNote (p).mono();
+    CHECKF (rmsSec (m, 1.2, 1.4) > 3 * tailLong0, "reverb decay: %g vs %g", rmsSec (m, 1.2, 1.4), tailLong0);
+    Patch dryShort;
+    CHECK (rmsSec (shortNote (dryShort).mono(), 0.5, 0.7) < 1e-6);
+    // pre-delay moves the start of the tail; width 0 = mono tail
+    p = Patch().set ("revOn", 1).set ("revMix", 1).set ("revPreDelay", 150).set ("revWidth", 0);
+    r = shortNote (p);
+    CHECK (rmsSec (r.mono(), 0.12, 0.16) < 0.1 * rmsSec (r.mono(), 0.25, 0.35));
+    diff = 0;
+    for (size_t i = (size_t) (0.3 * kSr); i < (size_t) (0.5 * kSr); ++i) diff += std::abs (r.L[i] - r.R[i]);
+    CHECK (diff < 1e-6);
+
+    // EQ: on a 110 Hz saw, each band does what it says
+    Patch saw = Patch().set ("op1Wave", waveSaw);
+    const auto dry = play (saw, 45).mono();
+    auto band = [&] (const char* id, float v2, double hz)
+    {
+        Patch q = Patch().set ("op1Wave", waveSaw).set ("eqOn", 1).set (id, v2);
+        return dB (magAt (play (q, 45).mono(), kA, kB, hz)) - dB (magAt (dry, kA, kB, hz));
+    };
+    CHECKF (band ("eqLowGain", -18, 110) < -10, "low shelf");
+    CHECKF (band ("eqLowGain", 12, 110) > 8, "low shelf boost");
+    CHECKF (band ("eqHighCut", 2000, 110 * 40) < -10, "high cut");
+    CHECKF (band ("eqLowCut", 500, 110) < -15, "low cut");
+    CHECKF (band ("eqMidGain", 12, 1100) > 6, "mid peak %g", band ("eqMidGain", 12, 1100));
+    CHECKF (band ("eqHighGain", -18, 110 * 60) < -10, "high shelf %g", band ("eqHighGain", -18, 110 * 60));
+    CHECKF (std::abs (band ("eqMidGain", 12, 110)) < 1.5, "mid peak leaves the fundamental alone (%g dB)", band ("eqMidGain", 12, 110));
+
+    // compressor: a low threshold and a high ratio take the level down and report gain reduction; the limiter holds the ceiling
+    p = Patch().set ("cmpOn", 1).set ("cmpThresh", -40).set ("cmpRatio", 20).set ("cmpAttack", 0.1f).set ("cmpRelease", 100);
+    m = play (p).mono();
+    CHECKF (dB (rms (m, kA, kB)) < dB (rms (ref.mono(), kA, kB)) - 10, "compression %g vs %g dB", dB (rms (m, kA, kB)), dB (rms (ref.mono(), kA, kB)));
+    {
+        auto holder = std::make_unique<ModelHolder> (p.model);
+        auto eng = std::make_unique<SynthEngine>();
+        eng->setParamValues (p.v.data()); eng->prepare (kSr); eng->setModel (&holder->model); eng->settleParams();
+        std::array<float, 4800> L {}, R {};
+        eng->noteOn (69, 127);
+        eng->render (L.data(), R.data(), 4800);
+        CHECKF (eng->takeGainReduction() > 10, "gain reduction stat");
+    }
+    p = Patch().set ("master", 1).set ("cmpOn", 1).set ("cmpThresh", 0).set ("cmpMakeup", 18).set ("cmpLimit", 1);
+    r = render (p, 563, { on (1, 60), on (1, 64), on (1, 67), on (1, 72) });
+    CHECKF (r.peak <= dbToGain (-0.3) + 0.02 && rms (r.mono(), kA, kB) > 0.3, "limiter peak %g rms %g", r.peak, rms (r.mono(), kA, kB));
+    p.set ("cmpLimit", 0);
+    CHECK (render (p, 563, { on (1, 60), on (1, 64), on (1, 67), on (1, 72) }).peak > 0.99);   // without it the clipper has to catch it
+
+    // order: distortion before the delay differs from after it; slots name every unit once (duplicates fall back)
+    p = Patch().set ("dstOn", 1).set ("dstDrive", 0.9f).set ("dlyOn", 1).set ("dlyTime", 100).set ("dlyFeedback", 0.7f).set ("dlyMix", 0.5f);
+    auto a = play (p);
+    p.set ("fxOrder1", (float) fxDelay).set ("fxOrder4", (float) fxDistortion);
+    CHECKF (maxDiff (play (p), a) > 1e-3, "fx order");
+    {
+        std::array<double, kNumParams> v {};
+        for (int s = 0; s < kNumFx; ++s) v[(size_t) fxOrderParam (s)] = 0;
+        int order[kNumFx];
+        FxChain::resolveOrder (v, order);
+        bool ok = true;
+        for (int s = 0; s < kNumFx; ++s) ok = ok && order[s] == s;
+        CHECK (ok);
+        v[(size_t) fxOrderParam (0)] = fxReverb; v[(size_t) fxOrderParam (1)] = fxReverb;
+        FxChain::resolveOrder (v, order);
+        CHECK (order[0] == fxReverb && order[1] == fxDistortion && order[6] == fxCompressor);
+    }
+
+    // switching a unit on mid-note crossfades: the transition has no step larger than the sound before or after it
+    for (const char* sw : { "dstOn", "choOn", "phaOn", "dlyOn", "revOn", "eqOn", "cmpOn" })
+    {
+        Patch q = Patch().set ("dstDrive", 0.9f).set ("eqLowGain", 12).set ("cmpThresh", -40).set ("cmpRatio", 20).set ("cmpMakeup", 12);
+        r = render (q, 500, { on (1, 69), { 200, [&q, sw] (SynthEngine&) { q.set (sw, 1); } } });
+        m = r.mono();
+        const double before = maxStep (m, 100 * 128, 190 * 128), after = maxStep (m, 300 * 128, 500 * 128);
+        const double during = maxStep (m, 190 * 128, 300 * 128);
+        CHECKF (during < 1.5 * std::max (before, after), "%s switch-on step %g (before %g, after %g)", sw, during, before, after);
+    }
+    // and off again: the tail is gone, the output is exactly the plain path
+    p = Patch().set ("dlyOn", 1).set ("dlyFeedback", 0.9f);
+    r = render (p, 563, { on (1, 69), { 200, [&p] (SynthEngine&) { p.set ("dlyOn", 0); } } });
+    Patch q3;
+    auto r2 = render (q3, 563, { on (1, 69) });
+    double worst = 0;
+    for (size_t i = 230 * 128; i < r.L.size(); ++i) worst = std::max (worst, (double) std::abs (r.L[i] - r2.L[i]));
+    CHECKF (worst == 0.0, "delay off mid-note leaves %g", worst);
+}
 } // namespace
 
 // Every factory preset renders a full note (on, hold, off, release, voice end) with finite, non-silent output.
@@ -740,6 +929,7 @@ int runEngineTests()
     step ("voices", voiceTests);
     step ("quality", qualityTests);
     step ("LFOs + mod matrix", modulationTests);
+    step ("FX chain", fxTests);
     step ("factory presets", factoryPresetTests);
     return failures;
 }

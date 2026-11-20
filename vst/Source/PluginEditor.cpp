@@ -405,5 +405,6 @@ void EightBallEditor::timerCallback()
         { "ops",      ops },
         { "active",   processor.statActiveMask.load() },
         { "lfo",      lfos },
+        { "gr",       juce::String (processor.statGr.exchange (0.0f), 2).getDoubleValue() },
     }));
 }

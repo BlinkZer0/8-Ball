@@ -79,6 +79,7 @@ public:
     std::array<std::atomic<float>, eightball::kNumOps> statOpActivity {};
     std::atomic<int>   statActiveMask { 0 };          // bit k = operator k is doing something
     std::array<std::atomic<float>, eightball::kNumLfos> statLfo {};   // LFO outputs, -1..1
+    std::atomic<float> statGr { 0.0f };               // compressor gain reduction, dB (max since the editor read it)
 
 private:
     void setPresetInfo (const juce::String& id, const juce::String& name, const juce::String& category);

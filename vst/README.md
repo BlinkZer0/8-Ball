@@ -33,7 +33,7 @@ per voice:   op 1..8 (wavetable, unison) <-- 8x8 PM grid, 8x8 ring grid, envelop
              filters: Parallel | Series 1>2>3 | 1+2>3   (SVF, 12/24 dB, drive, key, env, velocity)
 modulation:  4 LFOs (global, per-voice fade-in) + 30 envelopes + velocity / wheel / aftertouch / bend / key
              --> 16 mod slots --> added to any parameter's normalised value (per voice where it matters)
-global:      sum of voices --> [FX chain, milestone 3] --> master (smoothed) --> safety clip --> out
+global:      sum of voices --> FX chain (7 units, any order) --> master (smoothed) --> safety clip --> out
 2x OS:       the whole voice path at twice the rate, the voice sum decimated (polyphase half-band)
 ```
 
@@ -48,6 +48,19 @@ destinations (portamento time, the FX) take only the global sources (LFOs, wheel
 ranges: amplitude and filter envelopes 0..1, pitch and mod-index envelopes −1..1 (level 0.5 = 0), velocity,
 wheel and aftertouch 0..1, bend −1..1, key −1 (C1) .. +1 (C9), LFOs −1..1 × depth. Synced LFOs lock to the song
 position while the host plays and free-run otherwise.
+
+The FX chain (`dsp/Effects.h`) runs at the base rate on the voice sum, in the order `fxOrder1..7` give (a unit
+named twice runs once, units left out run last). Each unit computes `out = dry + enable × mix × (wet − dry)`:
+`enable` follows the ON switch with a 3 ms time constant, so switching crossfades, and a unit that has settled off
+is skipped and its state cleared, so it is a true bypass. Distortion: gain 1 + 30·drive² into tanh / hard clip /
+sine fold / bit-crush (with sample hold), level-compensated, a one-pole tone (400 Hz … 20 kHz), output gain.
+Chorus: two modulated delay lines (sine LFO, the right channel offset by spread × 90°). Phaser: 4 / 8 / 12
+first-order all-passes swept ±2 octaves around the centre (200 Hz … 4 kHz), feedback, the right channel 90° apart.
+Delay: 2 s stereo lines, the time smoothed over 50 ms (so changes glide, no clicks), tone at the output, ping-pong
+(mono in, L → R → L). Reverb: Freeverb-style 8 damped combs + 4 all-passes per channel, size scaling the comb
+lengths (smoothed), pre-delay up to 200 ms, width. EQ: RBJ biquads, recomputed per chunk from the smoothed knobs,
+unused bands skipped. Compressor: peak detector with attack / release, threshold / ratio, makeup, an optional
+limiter (instant attack, 50 ms release, −0.3 dBFS ceiling), gain reduction reported to the UI.
 
 Operators run in index order. A PM cell from a lower-numbered operator uses this sample's output, from a
 higher-numbered one the last sample's; self-feedback averages the last two samples. A cell's depth d gives
@@ -84,7 +97,7 @@ them, are rendered. Filters nothing has fed during a note are skipped.
 | matrix | pm11…pm88 (row modulates column), rm11…rm88, out1F1…out8Dry |
 | flt1–3 | On, Type, Slope, Cutoff, Reso, Drive, KeyTrack, EnvAmt, Vel, Mix; fltRouting |
 | lfo1–4 | On, Wave, Rate, Sync, Div, Depth, Delay, Phase |
-| fx | dst*, cho*, pha*, dly*, rev*, eq*, cmp*, fxOrder1–7 (milestone 3) |
+| fx | dst*, cho*, pha*, dly*, rev*, eq*, cmp*, fxOrder1–7 (the unit in each chain position) |
 | mod1–16 | On, Src, Dst (any Float parameter), Amt |
 
 The table is append-only and was frozen in milestone 1, so projects keep loading through every later milestone.
@@ -129,13 +142,13 @@ Build with `build.bat`, then run from `%LOCALAPPDATA%\EightBallVST\build\EightBa
 
 | Command | Checks |
 |---|---|
-| `EightBallTests.exe` | parameter table (count, index helpers, unique ids, neutral defaults for later milestones, the mod-destination list), presets (factory incl. `modDst`, round trip with model blocks, partial and garbage files), wavetables (normalisation, mip selection, drawn-shape DFT), envelopes (shapes, sustain, release and retrigger fades, loops, one-shots), operators (pitch of every mode, velocity, pan, every starter wave, custom waves, mute / solo / level / output column), matrix (PM sidebands, feedback, cells from higher-numbered operators, stacks, ring mod, the active-operator logic), filters (every type and slope, bypass = exact dry, mix 0, resonance, key tracking, envelope, velocity, every routing, drive), voices (polyphony and stealing, mono, legato and portamento, sustain, no stuck notes, panic, bend, envelopes, tempo sync), quality (phase reset, unison beating and spread, oversampling bypass and delay, aliasing of tables and of modulated high notes, clicks on level / ratio / depth jumps, the safety clipper, the model hand-off), LFOs + mod matrix (tremolo rate, tempo sync at two tempos, delay fade, square / S&H / drawn / phase, bypass: LFO off, slot off, amount 0, depth 0, no destination = bit-identical to the plain render; velocity → cutoff, key → level per voice, an envelope as a source, the wheel, two slots adding up, a global destination, the stats, no clicks with an LFO on a resonant cutoff), every factory preset through a full note |
+| `EightBallTests.exe` | parameter table (count, index helpers, unique ids, neutral defaults for later milestones, the mod-destination list), presets (factory incl. `modDst`, round trip with model blocks, partial and garbage files), wavetables (normalisation, mip selection, drawn-shape DFT), envelopes (shapes, sustain, release and retrigger fades, loops, one-shots), operators (pitch of every mode, velocity, pan, every starter wave, custom waves, mute / solo / level / output column), matrix (PM sidebands, feedback, cells from higher-numbered operators, stacks, ring mod, the active-operator logic), filters (every type and slope, bypass = exact dry, mix 0, resonance, key tracking, envelope, velocity, every routing, drive), voices (polyphony and stealing, mono, legato and portamento, sustain, no stuck notes, panic, bend, envelopes, tempo sync), quality (phase reset, unison beating and spread, oversampling bypass and delay, aliasing of tables and of modulated high notes, clicks on level / ratio / depth jumps, the safety clipper, the model hand-off), LFOs + mod matrix (tremolo rate, tempo sync at two tempos, delay fade, square / S&H / drawn / phase, bypass: LFO off, slot off, amount 0, depth 0, no destination = bit-identical to the plain render; velocity → cutoff, key → level per voice, an envelope as a source, the wheel, two slots adding up, a global destination, the stats, no clicks with an LFO on a resonant cutoff), FX chain (every unit off and every unit at mix 0 bit-identical to no chain; distortion harmonics, tone and types; chorus width and level; the phaser's sweeping notch; delay echo timing, feedback, sync at two tempos, ping-pong, tone; reverb tail, decay, pre-delay, width; every EQ band; compression, the gain-reduction stat, the limiter ceiling; the chain order and its resolution; a click-free switch-on of every unit; off again mid-note = exactly the plain path), every factory preset through a full note |
 | `--dump-params` | the C++ table as JSON; `tests\check-params.ps1` diffs it against params.js |
-| `--bench` | 16 voices × 8 operators: 8.7% of one core (14.8% with 2× OS, 15.8% with unison 4); 2 ops: 2.7% |
+| `--bench` | 16 voices × 8 operators: 7.9% of one core (14.4% with 2× OS, 14.9% with unison 4, 8.9% with all 7 FX on); 2 ops: 2.6%; the FX alone 0.9% |
 | `--loudness` | loudness of every factory preset (level matching, milestone 5) |
 | `--render "<Category/Name>" out.wav [seconds] [note]` | a preset to a WAV |
 | `--host-check "<path>\Eight Ball.vst3"` | loads the built VST3 like a DAW: scan, every parameter with a name and text, sound, automation during playback, state round trip into a fresh instance |
-| `tests\run-ui-tests.ps1 [-Page ops\|matrix\|filters\|art\|presets]` | the UI in headless Edge with a stand-in bridge (48 checks: controls for every parameter, drags, the quick ADSR, the keyboard, the menu, tooltips, the browser, the filter panels and routing, the envelope editor, LFO shapes, the mod matrix) + a screenshot in `tests/screenshots/` |
+| `tests\run-ui-tests.ps1 [-Page ops\|matrix\|filters\|art\|fx\|presets]` | the UI in headless Edge with a stand-in bridge (56 checks: a control for every parameter, drags, the quick ADSR, the keyboard, the menu, tooltips, the browser, the filter panels and routing, the envelope editor, LFO shapes, the mod matrix, the FX chain drag-reorder, the EQ curve, the gain-reduction meter) + a screenshot in `tests/screenshots/` |
 
 ## Layout
 
@@ -147,6 +160,7 @@ Source/
   dsp/Wavetable.h            partials / drawn cycle -> mipmapped wavetable, starter shapes
   dsp/Envelope.h             multi-point envelopes
   dsp/Model.h                wavetables + envelopes + LFO shapes a voice reads
+  dsp/Effects.h              the FX chain: distortion, chorus, phaser, delay, reverb, EQ, compressor / limiter
   SynthEngine.h              the engine (no JUCE)
   Params.h                   JUCE side of the table: display strings, APVTS layout, JSON dump
   ModelStore.*               model data, baking, JSON, lock-free hand-off
@@ -162,6 +176,7 @@ ui/                          the UI (HTML/CSS/SVG/JS), embedded in the binary
   js/envelope.js             the multi-point envelope editor, the drawn-shape editor
   js/filters.js              the filters page (response curves, routing diagram)
   js/articulators.js         the articulators page: envelope targets + toolbar, the LFOs, the mod matrix
+  js/fx.js                   the FX page: the chain bar (drag to reorder), one panel per unit, the EQ curve
   js/app.js                  UI wiring
 presets/factory_presets.json
 tests/                       PresetTests.cpp (main), EngineTests.cpp, EngineTools.cpp, HostCheck.cpp,
@@ -177,13 +192,13 @@ tests/                       PresetTests.cpp (main), EngineTests.cpp, EngineTool
 | `loadPreset {id}`, `initPreset`, `savePreset {name,overwrite}`, `deletePreset {id}`, `loadPresetFile`, `openPresetFolder` | `presetList {presets,folder}`, `preset {id,name,category}`, `saveResult {ok,exists,name,error}`, `message {text}` |
 | `paramMenu {id,x,y}`, `midiLearn {id}`, `midiForget {id}`, `learnCancel` | `learn {armed, map{id:cc}}` |
 | `setWave {op,wave}`, `setEnv {key,env}`, `setLfoShape {lfo,shape}` | `model {waves,envs,lfoShapes}` |
-| *web only:* `setTempo {bpm}`, `selectMidi {id}` | `stats {voices,peak,sustain,modWheel,bpm,ops[8],active,lfo[4]}`, `config {…}`, *web only:* `midiInputs` |
+| *web only:* `setTempo {bpm}`, `selectMidi {id}` | `stats {voices,peak,sustain,modWheel,bpm,ops[8],active,lfo[4],gr}`, `config {…}`, *web only:* `midiInputs` |
 
 ## Troubleshooting
 
 - **Live UI editing:** set the environment variable `EIGHTBALL_UI_DIR` to this repo's `vst\ui` folder before
   starting the DAW or Standalone. The UI then loads from disk: edit HTML/CSS/JS and just reopen the plugin window.
-  `EIGHTBALL_UI_PAGE=matrix` (or `filters`, `art`, `presets`) opens that page first.
+  `EIGHTBALL_UI_PAGE=matrix` (or `filters`, `art`, `fx`, `presets`) opens that page first.
 - **DevTools:** Shift + right-click in the plugin window, then *Inspect*.
 - **Blank window:** the WebView2 runtime is missing or blocked. Its data folder is `%TEMP%\EightBallVST-WebView2`;
   deleting it is safe.

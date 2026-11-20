@@ -441,6 +441,40 @@ body.web .web-only { display: flex !important; }
 .mod-val { font-family: var(--mono); font-size: 10px; color: var(--muted); }
 .mod-row.active .mod-val { color: var(--accent); }
 
+/* ================================================================== FX ===== */
+.fx-page { display: flex; flex-direction: column; gap: 10px; }
+.fx-chainbar { gap: 6px; }
+.fx-chain { display: flex; align-items: center; gap: 6px; }
+.fx-chip {
+  display: flex; align-items: center; gap: 7px; padding: 6px 12px;
+  background: #101215; border: 1px solid var(--panel-edge); border-radius: 6px;
+  font-size: 10px; font-weight: 700; letter-spacing: 0.12em; color: var(--muted); cursor: grab; user-select: none; touch-action: none;
+  position: relative;
+}
+.fx-chip + .fx-chip::before { content: "›"; position: absolute; left: -9px; top: 50%; transform: translateY(-50%); color: var(--faint); font-size: 14px; }
+.fx-chip.on { color: var(--text); border-color: var(--accent-dim); }
+.fx-chip.dragging { border-color: var(--accent); background: var(--accent-bg); cursor: grabbing; }
+.fx-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; align-items: start; }
+.fx-panel { gap: 6px; transition: opacity 150ms; }
+.fx-panel.off .fx-body { opacity: 0.45; }
+.fx-panel.dragging { border-color: var(--accent); }
+.fx-panel .panel-head { gap: 6px; }
+.fx-panel .panel-title { flex: 1; }
+.fx-handle { color: var(--faint); cursor: grab; font-size: 12px; letter-spacing: -2px; padding: 0 2px; touch-action: none; user-select: none; }
+.fx-handle:hover { color: var(--accent); }
+.fx-pos { font-family: var(--mono); font-size: 10px; color: var(--faint); }
+.fx-body { display: flex; flex-direction: column; gap: 4px; }
+.fx-top { display: flex; align-items: center; gap: 8px; font-size: 9px; letter-spacing: 0.12em; color: var(--muted); font-weight: 600; }
+.fx-knobs { justify-content: space-around; gap: 0; }
+.fx-knobs .knob { width: 50px; }
+.fx-div { width: 64px; font-size: 10px; padding: 2px; }
+.fx-eq-screen { height: 56px; }
+.fx-eq-screen svg { inset: 0; height: 100%; }
+.fx-gr { display: flex; align-items: center; gap: 6px; margin-left: auto; }
+.fx-gr-bar { width: 70px; height: 6px; background: #0f1113; border: 1px solid #1f2227; border-radius: 3px; overflow: hidden; }
+.fx-gr-fill { height: 100%; width: 0; background: var(--warn); transition: width 60ms linear; }
+.fx-gr-val { font-family: var(--mono); font-size: 10px; color: var(--muted); min-width: 44px; }
+
 /* a knob an active mod slot drives */
 .knob.modded::after { content: ""; position: absolute; top: 2px; right: 6px; width: 5px; height: 5px; border-radius: 50%; background: var(--warn); box-shadow: 0 0 5px var(--warn); }
 .knob { position: relative; }

@@ -1,9 +1,9 @@
 # Eight Ball: build plan
 
-Status (2026-11-20): **milestone 2 built**: on top of milestone 1 (the DSP core, the 8 operators, the PM / ring /
-output matrix, the plugin, OPERATORS and MATRIX), the FILTERS page, the multi-point envelope editor, 4 LFOs and
-the 16-slot mod matrix in the engine and on the ARTICULATORS · LFO page, 12 starter presets. All automated checks
-pass; waiting for hand-testing in Minihost Modular.
+Status (2026-11-20): **milestone 3 built**: on top of milestones 1-2 (the DSP core, the 8 operators, the PM /
+ring / output matrix, the plugin, OPERATORS, MATRIX, FILTERS, ARTICULATORS · LFO), the 7-unit FX chain in the
+engine and the FX page with drag-to-reorder, 12 starter presets. All automated checks pass; waiting for
+hand-testing in Minihost Modular.
 
 The brief's milestones, each ending with a stop for hand-testing:
 
@@ -11,8 +11,8 @@ The brief's milestones, each ending with a stop for hand-testing:
 |---|---|---|---|
 | 1 | DSP core + operators + matrix | plain-C++ engine, wavetable operators, 8x8 PM + 8x8 ring + output column, voice modes, 2x oversampling, the plugin, a usable UI for operators and the matrix | **done** |
 | 2 | Filters + articulators + LFOs | the FILTERS page, the multi-point envelope editor, 4 LFOs, the 16-slot mod matrix | **done** |
-| 3 | FX tab | Distortion, Chorus, Phaser, Delay, Reverb, EQ, Compressor / Limiter with drag-to-reorder | next |
-| 4 | Full UI + animated matrix | the harmonic editor and drawn shapes, glowing cells, per-operator scopes, signal-flow lines, Animate toggle | |
+| 3 | FX tab | Distortion, Chorus, Phaser, Delay, Reverb, EQ, Compressor / Limiter with drag-to-reorder | **done** |
+| 4 | Full UI + animated matrix | the harmonic editor and drawn shapes, glowing cells, per-operator scopes, signal-flow lines, Animate toggle | next |
 | 5 | Presets | 64 factory presets, level-matched, A/B compare | |
 | 6 | HTML build | the DSP core compiled to WebAssembly, Web Audio + Web MIDI, the same UI and presets | |
 
@@ -51,15 +51,17 @@ The brief's milestones, each ending with a stop for hand-testing:
 
 **Measured** (`EightBallTests --bench`, Release, this machine, 48 kHz):
 
-| case | milestone 1 | milestone 2 |
-|---|---|---|
-| 16 voices x 8 operators, unison 1, all carriers + 4 PM cells | 7.8% | 8.7% |
-| the same with 2x oversampling | 14.1% | 14.8% |
-| 16 voices x 8 operators, unison 4 | 14.8% | 15.8% |
-| 16 voices x 2 operators (a classic 2-op patch) | 2.5% | 2.7% |
+| case | milestone 1 | milestone 2 | milestone 3 |
+|---|---|---|---|
+| 16 voices x 8 operators, unison 1, all carriers + 4 PM cells | 7.8% | 8.7% | 7.9% |
+| the same with 2x oversampling | 14.1% | 14.8% | 14.4% |
+| 16 voices x 8 operators, unison 4 | 14.8% | 15.8% | 14.9% |
+| 16 voices x 2 operators (a classic 2-op patch) | 2.5% | 2.7% | 2.6% |
+| 16 voices x 8 operators, all 7 FX units on | | | 8.9% |
+| the FX chain alone (silence in) | | | 0.9% |
 
-(% of one core; milestone 2 adds the LFO and mod-slot pass per chunk and the per-voice parameter lookups, with no
-slots active in the benchmark)
+(% of one core; the figures move by about ±0.5 between runs, so the milestone-2 column was partly noise: the LFO
+and mod-slot pass costs well under a point with no slots active)
 
 Found by the checks during milestone 1 (fixed): parameters set to exactly 0 never reached the engine (the
 first-value compare started from 0 instead of "unset"); a curved envelope segment could evaluate a hair past its
@@ -133,3 +135,35 @@ is unreadable). Two starters use the new features: Wobble Bass (synced LFO 1 →
 - Mod matrix: Velocity → Filter 1 Cutoff, Mod Wheel → PM 2 > 1, Key → Op 1 Pan, Aftertouch → anything; two slots
   on one knob. The orange marker on the destination knob. Save a preset with slots and envelopes, reload it,
   save the project and reopen it.
+
+## Milestone 3 notes
+
+**Engine** (`dsp/Effects.h`, `FxChain` in `SynthEngine::render` between the voice sum and the master):
+- Every unit: `out = dry + enable × mix × (wet − dry)`. `enable` follows ON with a 3 ms time constant (a toggle
+  crossfades, settled in about 10 ms); a unit that has settled off is skipped and reset, so OFF is bit-identical
+  to no unit and a delay or reverb tail does not come back when the unit is switched on again.
+- Order: `fxOrder1..7` name the unit in each position; the first mention of a unit wins, units left out run last
+  in default order (so an automation lane that names the same unit twice still runs everything once).
+- Distortion (soft tanh / hard / sine fold / bit-crush with sample hold, gain 1 + 30·drive², compensated by
+  gain^−0.35, one-pole tone, output gain), chorus (two sine-modulated delay lines, spread = the right LFO's phase
+  offset), phaser (4 / 8 / 12 all-passes, centre 200 Hz … 4 kHz swept ±2 octaves, feedback), delay (time in ms or
+  a tempo division, smoothed over 50 ms so changes glide instead of clicking, tone at the output, ping-pong), reverb
+  (Freeverb-style combs + all-passes, size, decay, damping, pre-delay, width), EQ (RBJ biquads per chunk, unused
+  bands skipped), compressor (peak detector, attack / release, makeup, limiter at −0.3 dBFS, gain reduction in the
+  stats). The chain costs about 0.8% of a core with every unit on (`--bench`).
+- Not done on purpose: the distortion is not oversampled (the global 2× OS switch covers the voices only), and the
+  limiter has no lookahead (so no added latency); the safety clipper still sits after the master.
+
+**UI**: the chain bar (seven chips; drag one, or a panel's ⋮⋮ handle, onto another to move it) and one panel per
+unit in chain order: ON, the knobs, MIX; the EQ panel draws its response from the same biquad formulas, the
+compressor shows its gain reduction, the delay greys out TIME or the division depending on SYNC. The FX tab LED
+lights when any unit is on. Soft FM Pad (chorus + reverb) and Pluck (synced ping-pong delay) use the chain.
+
+**What to try in Minihost Modular** (milestone 3):
+- Load Pluck: the dotted-eighth ping-pong echo follows the host tempo; turn the delay off mid-phrase (no click, the
+  tail stops cleanly), on again, change SYNC / DIV / TIME while playing (the time glides).
+- Soft FM Pad: chorus and reverb; try SIZE, DECAY, PRE-DLY, WIDTH 0 (mono tail).
+- Distortion types on a bass with DRIVE up; TONE; the OUT knob. Phaser on a pad with 12 stages and feedback.
+- EQ: watch the curve while turning the knobs; LO CUT on a bass; a MID boost with a narrow Q.
+- Compressor: THRESH down with a chord, the GR meter moves; LIMIT with MAKEUP up: no clipping.
+- Drag REVERB before DISTORTION, then DELAY first; save a preset and reload it: the order comes back.

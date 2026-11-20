@@ -527,15 +527,9 @@
     moddedIds = next;
   });
 
-  // ===================================================== later milestones ====
-  const placeholders = {
-    'fx-page': ['FX · milestone 3', 'Distortion → Chorus → Phaser → Delay → Reverb → EQ → Compressor / Limiter, each with on/off and mix, drag to reorder.'],
-  };
-  for (const id in placeholders) {
-    const [title, text] = placeholders[id];
-    const p = el('div', 'panel placeholder', `<div class="panel-head"><span class="panel-title">${title}</span></div><p>${text}</p>`);
-    document.getElementById(id).appendChild(p);
-  }
+  // ======================================================================= FX =
+  const fx = new FxPage($('#fx-page'), { values, addKnob, control, setParams, log: logMidi });
+  refreshers.push((ids) => fx.refresh(ids));
 
   // ================================================================= GLOBAL =
   {
@@ -560,7 +554,7 @@
     matrix: 'Row modulates column · diagonal = feedback · drag a cell up / down · double-click = clear it',
     filters: 'Three filters per voice · send operators to them on the MATRIX page · ENV opens the cutoff by up to 5 octaves',
     art: 'Drag points · drag a segment = curve · double-click = add / delete a point · right-click = sustain, loop · SYNC = beats',
-    fx: 'Milestone 3',
+    fx: 'Global, after the voices · drag a unit to reorder the chain · every ON is a true bypass · MIX blends dry and wet',
     presets: 'Factory presets and the files in your user folder; SAVE AS stores the current sound',
   };
   let activePage = 'ops';
@@ -656,8 +650,9 @@
   const meterClip = document.querySelector('.meter-clip');
   const sustainLed = $('#sustain-led');
   let clipTimer = 0;
-  engine.on('stats', ({ voices, peak, sustain, modWheel, bpm, ops, active, lfo }) => {
+  engine.on('stats', ({ voices, peak, sustain, modWheel, bpm, ops, active, lfo, gr }) => {
     art.meters(lfo);
+    fx.meter(gr);
     $('#voice-count').textContent = `${voices}/${values.poly | 0}`;
     sustainLed.classList.toggle('on', !!sustain);
     if (typeof modWheel === 'number') wheel.setValue(modWheel);

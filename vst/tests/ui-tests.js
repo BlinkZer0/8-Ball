@@ -61,9 +61,8 @@
     check(sent.some(s => s.ev === 'uiReady'), 'UI sent uiReady');
     check($('#preset-name').textContent === 'Init', `preset name shown ('${$('#preset-name').textContent}')`);
     // every operator, matrix, filter, LFO and mod-slot parameter has a control; so do the global ones
-    const missing = PARAM_DEFS.filter(d => (/^op\d|^pm\d|^rm\d|^out\d|^flt|^lfo\d|^mod\d|^(master|poly|voiceMode|portaOn|portaTime|oversample|bendRange)$/.test(d.id))
-                                          && !document.querySelector(`[data-param="${d.id}"]`)).map(d => d.id);
-    check(missing.length === 0, `operator / matrix / filter / LFO / mod / global params have controls (missing: ${missing.join(', ') || 'none'})`);
+    const missing = PARAM_DEFS.filter(d => !/^fxOrder/.test(d.id) && !document.querySelector(`[data-param="${d.id}"]`)).map(d => d.id);
+    check(missing.length === 0, `every parameter but the FX order has a control (missing: ${missing.join(', ') || 'none'})`);
     check($$('.op-strip').length === 8, '8 operator strips');
     check($$('.mx-cell').length === 64 + 64 + 32, `matrix cells: ${$$('.mx-cell').length} (64 PM + 64 ring + 32 output)`);
     check($$('.mx-layout').length >= 10, `${$$('.mx-layout').length} algorithm layouts`);
@@ -220,6 +219,29 @@
     check($$('.mod-row')[0].classList.contains('active') && /\+50%/.test($$('.mod-val')[0].textContent), 'an active slot is highlighted with its amount');
     check($('[data-param="flt1Cutoff"]').classList.contains('modded'), 'the destination knob gets a modulation marker');
     check($('#art-led').classList.contains('on'), 'the ARTICULATORS tab LED lights for an active slot');
+
+    // ---- FX page
+    $$('.page-tab').find(t => t.dataset.page === 'fx').click();
+    check($$('.fx-panel').length === 7 && $$('.fx-chip').length === 7, '7 FX panels and 7 chain chips');
+    check($$('.fx-chip').map(c => c.textContent.trim()).join(',') === 'DISTORTION,CHORUS,PHASER,DELAY,REVERB,EQ,COMP', `chain shows the default order (${$$('.fx-chip').map(c => c.textContent.trim()).join(',')})`);
+    check($$('.fx-eq-screen .scr-line')[0].getAttribute('d').length > 50, 'EQ panel draws its response');
+    const n11 = sent.length;
+    $('[data-param="revOn"]').click();
+    check(sent.slice(n11).some(s => s.ev === 'setParam' && s.data.id === 'revOn' && s.data.value === 1), 'reverb ON sends setParam');
+    check($$('.fx-chip').find(c => c.textContent.includes('REVERB')).classList.contains('on') && $('#fx-led').classList.contains('on'), 'the chip and the FX tab LED light up');
+    // drag the REVERB chip onto the DISTORTION chip: reverb first
+    const rev = $$('.fx-chip').find(c => c.textContent.includes('REVERB')), dst = $$('.fx-chip').find(c => c.textContent.includes('DISTORTION'));
+    const rr = rev.getBoundingClientRect(), dr = dst.getBoundingClientRect();
+    rev.setPointerCapture = () => {};
+    const n12 = sent.length;
+    rev.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, clientX: rr.left + 5, clientY: rr.top + 5, pointerId: 5, button: 0, buttons: 1 }));
+    rev.dispatchEvent(new PointerEvent('pointermove', { bubbles: true, clientX: dr.left + 5, clientY: dr.top + 5, pointerId: 5, button: 0, buttons: 1 }));
+    rev.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, clientX: dr.left + 5, clientY: dr.top + 5, pointerId: 5, button: 0 }));
+    const so = sent.slice(n12).find(s => s.ev === 'setParams');
+    check(so && so.data.values.fxOrder1 === 4 && so.data.values.fxOrder2 === 0 && so.data.values.fxOrder7 === 6, `dragging REVERB first sends the new order (${so && JSON.stringify(so.data.values)})`);
+    check($$('.fx-chip')[0].textContent.includes('REVERB') && $$('.fx-panel')[0].classList.contains('fx-rev'), 'chips and panels follow the new order');
+    (listeners.stats || []).forEach(f => f({ voices: 1, peak: 0.5, sustain: false, modWheel: 0, bpm: 120, ops: [0, 0, 0, 0, 0, 0, 0, 0], active: 1, lfo: [0, 0, 0, 0], gr: 6.5 }));
+    check(/-6.5 dB/.test($('.fx-gr-val').textContent), 'gain reduction meter shows the stats value');
     $$('.page-tab').find(t => t.dataset.page === 'ops').click();
 
     // leave the page the screenshot run asked for

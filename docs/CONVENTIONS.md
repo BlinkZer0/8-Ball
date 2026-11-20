@@ -55,6 +55,7 @@ Identity: product `Eight Ball`, target `EightBallVST`, company `EightBall`, manu
 | `dsp/Wavetable.h` | `WaveSpec` (partials + phases, or a drawn cycle) -> band-limited mipmapped `Wavetable`; the starter shapes. |
 | `dsp/Envelope.h` | `EnvSpec` (multi-point, tension, sustain, loop, sync) and the per-voice `EnvState`. |
 | `dsp/Model.h` | `Model`: the per-operator wavetables, the 30 envelope specs, the drawn LFO shapes. |
+| `dsp/Effects.h` | The FX chain: `FxChain` and the seven units, each with the shared enable ramp (true bypass, 10 ms crossfade) and mix. |
 | `SynthEngine.h` | The engine: voices, operators, the PM and ring grids, output column, filters, voice modes, oversampling. `prepare / setParamValues / setModel / noteOn / noteOff / render(L, R, n) / panic`. |
 | `Params.h` | JUCE side: `formatValue`, `logRange`, `createParameterLayout()` with `ParameterID{id, 1}`, `paramTableToJson()`. |
 | `ModelStore.*` | Message-thread owner of the model data; bakes wavetables, JSON in/out, lock-free hand-off to the engine. |
@@ -124,8 +125,8 @@ Inherited: `ui/js/engine-juce.js` wraps `window.__JUCE__.backend` in a `JuceEngi
   `model {waves, envs, lfoShapes}` whenever its version changes (a preset load, a project reload, an edit).
 - `initPreset` loads the factory Init patch.
 - `stats` carries `voices, peak, sustain, modWheel, bpm, ops[8] (mean |output| per operator), active (bit mask of
-  operators doing something), lfo[4] (the LFO outputs)` for the operator activity bars, the LFO meters and, in
-  milestone 4, the animated matrix.
+  operators doing something), lfo[4] (the LFO outputs), gr (compressor gain reduction in dB)` for the operator
+  activity bars, the LFO and gain-reduction meters and, in milestone 4, the animated matrix.
 - **Right-click on a control opens the UI's own menu**: MIDI learn / Forget CC, Reset to default, and "Host automation
   menu…" which sends `paramMenu` (FL Studio's *Create automation clip*). The Ham used a LEARN mode button instead;
   the brief asks for right-click. Shift + right-click keeps the browser menu (DevTools).
@@ -133,7 +134,7 @@ Inherited: `ui/js/engine-juce.js` wraps `window.__JUCE__.backend` in a `JuceEngi
 ## 6. UI code
 
 - Plain ES, `'use strict'`, no framework, no build step. Scripts load in order:
-  `params.js, engine-juce.js, knob.js, controls.js, piano.js, matrix.js, envelope.js, filters.js, articulators.js, app.js`.
+  `params.js, engine-juce.js, knob.js, controls.js, piano.js, matrix.js, envelope.js, filters.js, articulators.js, fx.js, app.js`.
 - All controls are SVG. `Knob` is the reference widget (drag, Shift or Ctrl for fine, wheel, arrows, double-click
   reset, gestures; sizes `md` and `sm`). Panels are built in `app.js` (`addKnob`, `control(Class, id)`) and every
   control carries `data-param`. Pages are tabs with an LED that shows whether the page's features are active.
@@ -154,6 +155,8 @@ Inherited: `ui/js/engine-juce.js` wraps `window.__JUCE__.backend` in a `JuceEngi
   `addKnob` / `control` helpers. A parameter may have more than one knob (an envelope's amount knob appears on the
   OPERATORS and ARTICULATORS pages): `addKnob` registers the extra ones as bound controls.
 - `SelectBox` takes an optional parallel `groups` array that becomes `<optgroup>`s (the mod destination list).
+- `FxPage` (`fx.js`) lays the seven unit panels out in chain order and resolves `fxOrder1-7` the way the engine
+  does (first mention wins, missing units last); a drag writes all seven slots back as a permutation.
 - The OPERATORS page is **eight strips**, one per operator (mute / solo, activity bar, wave screen and selector,
   then every knob in one row, with a quick AMP ENV ADSR that edits the four points of the operator's amplitude
   envelope). Pages: OPERATORS, MATRIX, FILTERS, ARTICULATORS · LFO, FX, PRESETS.
@@ -192,13 +195,13 @@ parity test: the browser runs the same compiled code as the plugin.
 | `--render "<Category/Name>" out.wav [seconds] [note]` | renders a preset to a WAV, for listening without a DAW |
 | `--host-check "<path to .vst3>"` | loads the built VST3 like a DAW: scan, parameters, sound, automation, state round trip |
 | `tests\check-params.ps1` | params.js == ParamTable.h |
-| `tests\run-ui-tests.ps1 [-Page ops|matrix|filters|art|presets]` | the plugin UI in headless Edge with a stand-in bridge: no script errors, controls for every parameter, drag / double-click / layouts / quick ADSR / keyboard / right-click menu / tooltip / preset browser, the filter panels and routing, the envelope editor (add / drag / sustain / shapes), LFO shapes, the mod matrix; also saves a screenshot |
+| `tests\run-ui-tests.ps1 [-Page ops|matrix|filters|art|fx|presets]` | the plugin UI in headless Edge with a stand-in bridge: no script errors, controls for every parameter, drag / double-click / layouts / quick ADSR / keyboard / right-click menu / tooltip / preset browser, the filter panels and routing, the envelope editor (add / drag / sustain / shapes), LFO shapes, the mod matrix, the FX chain reorder, the EQ curve, the GR meter; also saves a screenshot |
 
 **Eight Ball:** every on/off switch has a bypass test that renders with the feature off and compares with the
 plain path: filter on/off (exactly equal to the dry render), filter mix 0, 2x oversampling off (identical to the
 plain render; on matches it after the decimator's delay), mute, solo, the LFO switch, the mod-slot switch (plus
-amount 0, depth 0 and "no destination": bit-identical to the plain render). Milestone 3 adds the same for every FX
-unit.
+amount 0, depth 0 and "no destination": bit-identical to the plain render), every FX unit's ON (off = bit-identical
+to no chain, mix 0 = exactly dry, off again mid-note = exactly the plain path once the crossfade is done).
 
 ## 10. Docs and release style
 

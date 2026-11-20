@@ -224,6 +224,8 @@ void EightBallProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::M
     }
     statActiveMask.store (mask);
     for (int l = 0; l < kNumLfos; ++l) statLfo[(size_t) l].store ((float) engine.lfoValue (l));
+    const float gr = (float) engine.takeGainReduction();
+    if (gr > statGr.load()) statGr.store (gr);
 }
 
 //==============================================================================

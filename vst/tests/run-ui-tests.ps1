@@ -2,7 +2,7 @@
 #  Runs the plugin UI (vst/ui) in headless Edge with a stand-in bridge
 #  (tests/ui-tests.js) and reports the checks it makes. Also saves a
 #  screenshot of the UI to vst/tests/screenshots/ui.png.
-#  Usage: powershell -ExecutionPolicy Bypass -File run-ui-tests.ps1 [-Page ops|matrix|filters|art|presets]
+#  Usage: powershell -ExecutionPolicy Bypass -File run-ui-tests.ps1 [-Page ops|matrix|filters|art|fx|presets]
 # ============================================================================
 param([string]$Page = 'ops')
 $ErrorActionPreference = 'Stop'

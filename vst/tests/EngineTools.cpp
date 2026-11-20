@@ -7,17 +7,21 @@ using namespace eightball::test;
 // CPU: 16 voices x 8 operators (the brief's target), measured as % of one core for 10 s of audio.
 int runBench()
 {
-    struct Case { const char* name; int unison; bool os; int ops; };
+    struct Case { const char* name; int unison; bool os; int ops; bool fx; };
     const Case cases[] {
-        { "16 voices x 8 ops, unison 1 (all 8 ops carriers + 4 PM cells)", 1, false, 8 },
-        { "16 voices x 8 ops, unison 1, 2x oversampling", 1, true, 8 },
-        { "16 voices x 8 ops, unison 4", 4, false, 8 },
-        { "16 voices x 2 ops (a classic 2-op FM patch)", 1, false, 2 },
+        { "16 voices x 8 ops, unison 1 (all 8 ops carriers + 4 PM cells)", 1, false, 8, false },
+        { "16 voices x 8 ops, unison 1, 2x oversampling", 1, true, 8, false },
+        { "16 voices x 8 ops, unison 4", 4, false, 8, false },
+        { "16 voices x 2 ops (a classic 2-op FM patch)", 1, false, 2, false },
+        { "16 voices x 8 ops, unison 1, all 7 FX units on", 1, false, 8, true },
+        { "silence, all 7 FX units on (the FX alone)", 1, false, 0, true },
     };
     for (const auto& c : cases)
     {
         Patch p;
         p.set ("poly", 16).set ("oversample", c.os ? 1.0f : 0.0f);
+        if (c.fx) for (const char* u : { "dstOn", "choOn", "phaOn", "dlyOn", "revOn", "eqOn", "cmpOn" }) p.set (u, 1);
+        if (c.fx) p.set ("eqLowGain", 3).set ("eqMidGain", -3).set ("eqHighGain", 2).set ("eqLowCut", 40).set ("eqHighCut", 18000);
         for (int k = 0; k < c.ops; ++k)
         {
             p.set (opParam (k, fUnison), (float) c.unison);
@@ -38,7 +42,7 @@ int runBench()
         engine.setModel (&holder->model);
         engine.settleParams();
         std::array<float, 512> L {}, R {};
-        for (int n = 48; n < 64; ++n) engine.noteOn (n, 100);
+        if (c.ops > 0) for (int n = 48; n < 64; ++n) engine.noteOn (n, 100);
         const int blocks = (int) (kSr * 10 / 512);
         const auto t0 = juce::Time::getMillisecondCounterHiRes();
         for (int b = 0; b < blocks; ++b)

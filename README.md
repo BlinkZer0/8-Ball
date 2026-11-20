@@ -1,4 +1,4 @@
-# Eight Ball: v0.2 (milestone 2 of 6)
+# Eight Ball: v0.3 (milestone 3 of 6)
 
 Eight Ball is an 8-operator FM synthesizer: harmonic-editor wavetable operators, an 8×8 phase-modulation grid
 plus an 8×8 ring-modulation grid, three multimode filters, freeform envelopes, four LFOs, a mod matrix, an FX
@@ -9,7 +9,7 @@ same way.
 
 | Build | Where | Status |
 |---|---|---|
-| **VST3 plugin** + Standalone | [`vst/`](vst/README.md) | milestone 2: the DSP core, the 8 operators, the matrix, the three filters, the envelope editor, 4 LFOs, the 16-slot mod matrix, the plugin, the OPERATORS / MATRIX / FILTERS / ARTICULATORS pages, 12 starter presets; all automated checks pass |
+| **VST3 plugin** + Standalone | [`vst/`](vst/README.md) | milestone 3: the DSP core, the 8 operators, the matrix, the three filters, the envelope editor, 4 LFOs, the 16-slot mod matrix, the 7-unit FX chain, the plugin, every page but the harmonic editor and the animated matrix, 12 starter presets; all automated checks pass |
 | **Web build** | `web/index.html` | milestone 6 |
 
 The plan, the milestones and the measured results are in [docs/PLAN.md](docs/PLAN.md). The house rules are in
@@ -25,9 +25,13 @@ The plan, the milestones and the measured results are in [docs/PLAN.md](docs/PLA
 |---|---|
 | ![Filters page](vst/tests/screenshots/ui-filters.png) | ![Articulators page](vst/tests/screenshots/ui-art.png) |
 
+| FX | |
+|---|---|
+| ![FX page](vst/tests/screenshots/ui-fx.png) | |
+
 (made by `vst\tests\run-ui-tests.ps1` from the real UI with a stand-in bridge)
 
-## What it does so far (milestones 1 and 2)
+## What it does so far (milestones 1 to 3)
 
 **The 8 operators**
 - Each operator plays a **band-limited, mipmapped wavetable** baked from a set of partials (level and phase each,
@@ -76,6 +80,16 @@ The plan, the milestones and the measured results are in [docs/PLAN.md](docs/PLA
   (±100% = the knob's full range); sources that differ per voice (envelopes, velocity, key, the LFOs with their
   delay) act per voice. Knobs that are being modulated carry a marker.
 
+**FX** (FX page; global, after the voices, before the master)
+- **Distortion** (soft, hard, fold, bit-crush; drive, tone, output), **Chorus** (rate, depth, delay, feedback,
+  stereo spread), **Phaser** (4 / 8 / 12 stages, rate, depth, centre, feedback), **Delay** (ms or a tempo
+  division, feedback, ping-pong, tone), **Reverb** (size, decay, damping, pre-delay, width), **EQ** (low cut,
+  high cut, low shelf, mid peak with Q, high shelf, with a response curve), **Compressor** (threshold, ratio,
+  attack, release, makeup, a gain-reduction meter) with a **limiter** at −0.3 dBFS.
+- Every unit has **ON** (a true bypass: off, it costs nothing and the output is bit-identical to a chain without
+  it; switching crossfades over 10 ms so it never clicks) and **MIX**.
+- **Drag a unit** in the chain bar or by its handle to reorder the chain.
+
 **Voices**
 - 1–32 voices (16 by default), **Poly / Mono / Legato**, **portamento** with a time knob, sustain pedal,
   pitch bend with a range knob, aftertouch and mod wheel.
@@ -96,7 +110,7 @@ The plan, the milestones and the measured results are in [docs/PLAN.md](docs/PLA
 **Presets**
 - 12 starter presets (Init plus one or two per category: E-Pianos & Bells, Basses, Leads, Pads, Brass & Plucks,
   Organs & Keys, Evolving & Textures, FX & Percussion; Wobble Bass and Vibrato Lead use the LFOs and the mod
-  matrix). The 64 level-matched factory presets come in milestone 5.
+  matrix, Soft FM Pad and Pluck use the FX). The 64 level-matched factory presets come in milestone 5.
 - A category browser (PRESETS page), ‹ › arrows, INIT, SAVE (replaces the current user preset), SAVE AS, LOAD,
   FOLDER; `*` after the name when you've changed something.
 - `.ebpreset` files (plain JSON: every parameter plus the waves, envelopes and LFO shapes) in
@@ -128,22 +142,26 @@ Build details, the bridge between the UI and C++, tests and troubleshooting are 
 
 | case | % of one core |
 |---|---|
-| 16 voices × 8 operators, unison 1 (all carriers + 4 PM cells) | 8.7% |
-| the same with 2× oversampling | 14.8% |
-| 16 voices × 8 operators, unison 4 | 15.8% |
-| 16 voices × 2 operators | 2.7% |
+| 16 voices × 8 operators, unison 1 (all carriers + 4 PM cells) | 7.9% |
+| the same with 2× oversampling | 14.4% |
+| 16 voices × 8 operators, unison 4 | 14.9% |
+| 16 voices × 2 operators | 2.6% |
+| 16 voices × 8 operators with all 7 FX units on | 8.9% |
+| the FX chain alone (all 7 on, silence in) | 0.9% |
 
-(milestone 1 measured 7.8 / 14.1 / 14.8 / 2.5%; the per-voice mod-matrix pass added about a point)
+(the figures move by about ±0.5 between runs; milestone 1 read 7.8 / 14.1 / 14.8 / 2.5%)
 
-Automated checks (all passing): the parameter table and the preset files, 9 groups of engine checks (wavetables,
+Automated checks (all passing): the parameter table and the preset files, 10 groups of engine checks (wavetables,
 envelopes, operators, matrix, filters, voices, quality: bypass switches, clicks, stuck notes, aliasing,
 oversampling; LFOs + mod matrix: rate, sync, delay, every shape, bypass of the LFO switch / slot switch / amount /
-depth, per-voice sources, global destinations, clicks; every factory preset through a full note),
-`check-params.ps1` (491 parameters match between C++ and JS), `run-ui-tests.ps1` (48 UI checks per page),
-`--host-check` (the built VST3 loaded like a DAW: parameters, sound, automation, state round trip).
+depth, per-voice sources, global destinations, clicks; the FX chain: every unit's bypass and mix 0 bit-identical,
+what each unit does, delay timing and sync, reverb tail and decay, EQ bands, compression and the limiter ceiling,
+the order, click-free switching; every factory preset through a full note), `check-params.ps1` (491 parameters
+match between C++ and JS), `run-ui-tests.ps1` (56 UI checks per page), `--host-check` (the built VST3 loaded like a
+DAW: parameters, sound, automation, state round trip).
 
 **Still to confirm by hand:** everything in Minihost Modular and FL Studio: sound, the UI, MIDI learn, the
-right-click host menu, project save / reopen, the envelope editor and the LFOs by ear.
+right-click host menu, project save / reopen, the envelope editor, the LFOs and the FX by ear.
 
 ## Dev workflow
 

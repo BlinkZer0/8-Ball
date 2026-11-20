@@ -12,7 +12,7 @@
 //                      midiLearn{id}, midiForget{id}, learnCancel,
 //                      setWave{op,wave}, setEnv{key,env}, setLfoShape{lfo,shape}
 //   C++ -> UI events : params{id:value...}, notes{on[],off[]},
-//                      stats{voices,peak,sustain,modWheel,bpm,ops[8],active,lfo[4]}, config{...},
+//                      stats{voices,peak,sustain,modWheel,bpm,ops[8],active,lfo[4],gr}, config{...},
 //                      presetList{presets[],folder}, preset{id,name,category},
 //                      saveResult{ok,exists,name,error}, message{text},
 //                      model{waves,envs,lfoShapes}, learn{armed,map{id:cc}}

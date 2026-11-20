@@ -80,7 +80,8 @@
       { "name": "Soft FM Pad",
         "params": { "op1Level": 0.8, "op1Unison": 3, "op1Detune": 12, "op1Spread": 0.8, "op2Ratio": 2, "op2Level": 0.5, "pm21": 0.25,
                     "op3Ratio": 0.5, "op3Level": 0.6, "op3Unison": 2, "op3Detune": 9, "op3Spread": 0.7, "op4Ratio": 3, "op4Level": 0.3, "pm43": 0.2,
-                    "out1Dry": 0.6, "out3Dry": 0.5 },
+                    "out1Dry": 0.6, "out3Dry": 0.5,
+                    "choOn": 1, "choRate": 0.4, "choDepth": 0.4, "choMix": 0.35, "revOn": 1, "revSize": 0.8, "revDecay": 0.7, "revMix": 0.3 },
         "envs": {
           "op1Amp": { "points": [[0, 0], [0.8, 1, 0.2], [1.5, 0.9, -0.2], [3.0, 0, -0.4]], "sustain": 2 },
           "op2Amp": { "points": [[0, 0], [1.5, 1, 0.3], [2.0, 0.7, -0.2], [3.0, 0, -0.4]], "sustain": 2 },
@@ -90,7 +91,8 @@
     ] },
     { "name": "Brass & Plucks", "presets": [
       { "name": "Pluck", "base": "perc",
-        "params": { "op1Level": 0.9, "op1Vel": 0.5, "op2Ratio": 2, "op2Level": 0.7, "op2Vel": 0.9, "pm21": 0.4, "pm22": 0.3, "out1Dry": 0.8 } }
+        "params": { "op1Level": 0.9, "op1Vel": 0.5, "op2Ratio": 2, "op2Level": 0.7, "op2Vel": 0.9, "pm21": 0.4, "pm22": 0.3, "out1Dry": 0.8,
+                    "dlyOn": 1, "dlySync": 1, "dlyDiv": 7, "dlyFeedback": 0.35, "dlyPingPong": 1, "dlyTone": 0.5, "dlyMix": 0.22 } }
     ] },
     { "name": "Organs & Keys", "presets": [
       { "name": "Additive Organ",

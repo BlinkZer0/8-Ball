@@ -13,7 +13,7 @@
 //    ring-mod grid. Its output goes through the output column to Filter 1,
 //    Filter 2, Filter 3 and/or Dry. The three multimode filters (TPT SVF,
 //    12/24 dB) are per voice and run Parallel, Series or 1+2 > 3.
-//  Global: voice sum -> (FX chain, milestone 3) -> master (smoothed) -> safety clip.
+//  Global: voice sum -> FX chain (dsp/Effects.h) -> master (smoothed) -> safety clip.
 //
 //  Control rate: every kChunk (32) samples the envelopes, pitches, levels,
 //  pans, sends, grid depths and filter coefficients are recomputed; every one
@@ -36,6 +36,7 @@
 #include "dsp/Wavetable.h"
 #include "dsp/Envelope.h"
 #include "dsp/Model.h"
+#include "dsp/Effects.h"
 
 namespace eightball
 {
@@ -146,6 +147,7 @@ public:
         for (auto& v : voices) v = Voice {};
         for (auto& l : lfo) l = LfoState {};
         hbL.reset(); hbR.reset();
+        fx.prepare (sr);
         masterGain = val[master];
         panic();
     }
@@ -283,6 +285,7 @@ public:
             for (auto& f : v.flt) f.reset();
             v.held = v.sustained = v.alive = false;
         }
+        fx.reset();   // delay and reverb tails too
     }
 
     // Writes (does not add) numSamples into L and R (R may be null: mono sums).
@@ -313,6 +316,7 @@ public:
                 renderChunk (n, sr);
                 for (int i = 0; i < n; ++i) { outL[(size_t) i] = mixL[(size_t) i]; outR[(size_t) i] = mixR[(size_t) i]; }
             }
+            fx.process (outL.data(), outR.data(), n, val, bpm);
 
             const double target = val[master];
             double g = masterGain;
@@ -356,6 +360,9 @@ public:
     double paramValue (int i) const { return val[(size_t) i]; }
     // the LFOs' current outputs (-1..1, depth applied; 0 when off), for the UI
     double lfoValue (int l) const { return lfo[(size_t) l].value; }
+    // the compressor's deepest gain reduction (dB) since the last call
+    double takeGainReduction() { return fx.takeGainReduction(); }
+    const FxChain& effects() const { return fx; }
     static int latencySamples (bool os) { return os ? HalfbandState::kLatency2x : 0; }
 
 private:
@@ -985,6 +992,7 @@ private:
 
     std::array<double, 2 * kChunk> mixL {}, mixR {};
     std::array<double, kChunk> outL {}, outR {};
+    FxChain fx;
     HalfbandState hbL, hbR;
     bool lastOs = false;
 
