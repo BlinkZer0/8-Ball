@@ -1,4 +1,4 @@
-# Eight Ball: v1.0 (milestone 6 of 6)
+# Eight Ball: v1.0 
 
 Eight Ball is an 8-operator FM synthesizer: harmonic-editor wavetable operators, an 8×8 phase-modulation grid
 plus an 8×8 ring-modulation grid, three multimode filters, freeform envelopes, four LFOs, a mod matrix, an FX
