@@ -62,6 +62,12 @@ The brief's milestones, each ending with a stop for hand-testing:
 (% of one core; the figures move by about ±0.5 between runs, so the milestone-2 column was partly noise: the LFO
 and mod-slot pass costs well under a point with no slots active)
 
+After milestone 5, timed one case at a time with 20 s of idle before each (`--bench <case>`): 8 ops 8.2%, 2× OS
+14.9%, unison 4 16.1%, 2 ops 2.7%, all 7 FX on 9.2%, the FX alone 1.0% (the oversampled distortion adds about
+0.1 of that). **This laptop's turbo window closes about 2.5 s into a run**: in one `--bench` pass the cases after
+the second read up to twice as slow (unison 4 at 23%, 2 ops at 6%) although the code is the same, so time cases
+cold when a number matters.
+
 Found by the checks during milestone 1 (fixed): parameters set to exactly 0 never reached the engine (the
 first-value compare started from 0 instead of "unset"); a curved envelope segment could evaluate a hair past its
 end and `pow()` a negative base, giving NaN at the end of a one-shot envelope (the Tine Piano preset) and a crash
@@ -150,8 +156,11 @@ is unreadable). Two starters use the new features: Wobble Bass (synced LFO 1 →
   (Freeverb-style combs + all-passes, size, decay, damping, pre-delay, width), EQ (RBJ biquads per chunk, unused
   bands skipped), compressor (peak detector, attack / release, makeup, limiter at −0.3 dBFS, gain reduction in the
   stats). The chain costs about 0.8% of a core with every unit on (`--bench`).
-- Not done on purpose: the distortion is not oversampled (the global 2× OS switch covers the voices only), and the
-  limiter has no lookahead (so no added latency); the safety clipper still sits after the master.
+- Added after milestone 5 (before the web build froze the engine): the distortion's shaper runs 2× oversampled
+  (the half-band pair as upsampler and decimator; 2 samples of delay, the dry path delayed to match, reported as
+  latency while the unit is on; the tests show the aliasing of a hard clip on E6 drops to under a third), and the
+  limiter has 64 samples of lookahead (1.3 ms, reported as latency while LIMIT is on; a peak can no longer pass
+  the ceiling). The safety clipper still sits after the master.
 
 **UI**: the chain bar (seven chips; drag one, or a panel's ⋮⋮ handle, onto another to move it) and one panel per
 unit in chain order: ON, the knobs, MIX; the EQ panel draws its response from the same biquad formulas, the

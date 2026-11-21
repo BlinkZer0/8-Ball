@@ -300,6 +300,7 @@
     // leave the page the screenshot run asked for
     if (window.__uiTestPage) { const t = $$('.page-tab').find(x => x.dataset.page === (window.__uiTestPage === 'wave' ? 'ops' : window.__uiTestPage)); if (t) t.click(); }
     if (window.__uiTestPage === 'matrix') $$('.mx-layout').find(b => b.textContent.startsWith('Two 4-op')).click();
+    if (window.__uiTestPage === 'filters') $('[data-param="fltRouting"] button:nth-child(3)').click();
     const fails = results.filter(r => !r.ok).length;
     document.getElementById('ui-test-out').textContent = JSON.stringify({ fails, results });
     document.title = 'done';

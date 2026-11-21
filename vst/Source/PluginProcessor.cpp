@@ -33,7 +33,7 @@ void EightBallProcessor::prepareToPlay (double sampleRate, int)
     engine.prepare (sampleRate);
     engine.settleParams();
     keyboardState.reset();
-    const int lat = SynthEngine::latencySamples (paramValue (oversample) >= 0.5f);
+    const int lat = currentLatency();
     reportedLatency = lat;
     setLatencySamples (lat);
 }
@@ -141,7 +141,7 @@ void EightBallProcessor::timerCallback()
     model.collectRetired();
 
     // the oversampling filters delay the output a few samples: tell the host
-    if (const int lat = SynthEngine::latencySamples (paramValue (oversample) >= 0.5f); lat != reportedLatency)
+    if (const int lat = currentLatency(); lat != reportedLatency)
     {
         reportedLatency = lat;
         setLatencySamples (lat);
@@ -266,6 +266,12 @@ PresetData EightBallProcessor::snapshot() const
         if (i != master && ! paramDef (i).noPreset) data.values[(size_t) i] = paramValue (i);
     data.model = model.data();
     return data;
+}
+
+int EightBallProcessor::currentLatency() const
+{
+    return SynthEngine::latencyFor (paramValue (oversample) >= 0.5f, paramValue (dstOn) >= 0.5f,
+                                    paramValue (cmpOn) >= 0.5f && paramValue (cmpLimit) >= 0.5f);
 }
 
 void EightBallProcessor::abToggle()

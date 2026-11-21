@@ -116,6 +116,14 @@ struct HalfbandState
         run (d, s0, s1);
         return 0.5 * (s0 + s1);
     }
+    // one input at the base rate -> two outputs at 2x (the same two all-pass branches; the odd branch
+    // lags the even one by one 2x sample, so its output is the later of the pair)
+    void up (const HalfbandDesign& d, double in, double& out0, double& out1)
+    {
+        double s0 = in, s1 = in;
+        run (d, s0, s1);
+        out0 = s0; out1 = s1;
+    }
 };
 
 // TPT state-variable filter, one 12 dB stage with low / band / high outputs.

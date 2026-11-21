@@ -72,17 +72,17 @@ body.plugin .synth { position: absolute; top: 8px; left: 50%; transform-origin: 
 }
 
 /* -------------------------------------------------------------- top bar --- */
-.topbar { display: flex; align-items: center; gap: 16px; }
-.brand { display: flex; align-items: center; gap: 10px; }
+.topbar { display: flex; align-items: center; gap: 12px; }
+.brand { display: flex; align-items: center; gap: 10px; flex: none; }
 .brand-logo { width: 38px; height: 38px; filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.7)); }
 .ball-eight { font: 700 12px var(--sans); fill: #0a0a0a; text-anchor: middle; }
 .brand-text { display: flex; flex-direction: column; line-height: 1.1; }
-.brand-mark { font-size: 20px; font-weight: 800; letter-spacing: 0.18em; }
-.brand-sub { font-size: 9px; letter-spacing: 0.22em; color: var(--accent); margin-top: 3px; }
+.brand-mark { font-size: 20px; font-weight: 800; letter-spacing: 0.18em; white-space: nowrap; }
+.brand-sub { font-size: 9px; letter-spacing: 0.22em; color: var(--accent); margin-top: 3px; white-space: nowrap; }
 
 .patch-display {
   flex: 1;
-  min-width: 200px;
+  min-width: 150px;
   display: flex;
   align-items: center;
   gap: 6px;
@@ -105,7 +105,7 @@ body.plugin .synth { position: absolute; top: 8px; left: 50%; transform-origin: 
 
 .preset-actions { display: flex; gap: 5px; align-items: center; }
 .ab-ctl { display: inline-flex; background: #101215; border: 1px solid var(--panel-edge); border-radius: 6px; padding: 2px; gap: 2px; margin-right: 4px; }
-.ab-btn { background: transparent; border: none; border-radius: 4px; padding: 4px 8px; font-size: 11px; font-weight: 800; letter-spacing: 0.08em; color: var(--muted); cursor: pointer; }
+.ab-btn { background: transparent; border: none; border-radius: 4px; padding: 4px 6px; font-size: 11px; font-weight: 800; letter-spacing: 0.08em; color: var(--muted); cursor: pointer; }
 .ab-btn:hover { color: var(--text); }
 .ab-btn.on { background: var(--accent-bg); color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent-dim); }
 .ab-btn.copy { font-size: 9px; letter-spacing: 0.12em; }
@@ -114,8 +114,8 @@ body.plugin .synth { position: absolute; top: 8px; left: 50%; transform-origin: 
   background: linear-gradient(180deg, #24272c, #1b1d21);
   border: 1px solid var(--panel-edge);
   border-radius: 6px;
-  padding: 6px 10px;
-  font-size: 11px; font-weight: 700; letter-spacing: 0.12em;
+  padding: 6px 7px;
+  font-size: 10px; font-weight: 700; letter-spacing: 0.08em;
   color: var(--text);
   cursor: pointer;
   white-space: nowrap;
@@ -126,21 +126,21 @@ body.plugin .synth { position: absolute; top: 8px; left: 50%; transform-origin: 
 .pd-btn.primary:hover { border-color: var(--accent); }
 .pd-btn.danger { background: #2a1512; border-color: #5b2a22; color: #ff9c8a; }
 
-.top-controls { display: flex; align-items: center; gap: 12px; }
+.top-controls { display: flex; align-items: center; gap: 9px; }
 .midi-pick { display: flex; align-items: center; gap: 8px; }
 .midi-pick select {
   background: var(--screen); color: var(--text);
   border: 1px solid var(--panel-edge); border-radius: 5px;
   padding: 5px 8px; font: 12px var(--sans); max-width: 200px;
 }
-.indicator { display: flex; align-items: center; gap: 6px; font-size: 10px; letter-spacing: 0.14em; color: var(--muted); font-weight: 600; }
+.indicator { display: flex; align-items: center; gap: 5px; font-size: 10px; letter-spacing: 0.1em; color: var(--muted); font-weight: 600; }
 .voices-ind b { font-family: var(--mono); color: var(--accent); font-weight: 600; font-size: 12px; letter-spacing: 0; }
-.meter { position: relative; width: 90px; height: 7px; background: #0f1113; border-radius: 3px; overflow: hidden; border: 1px solid #1f2227; }
+.meter { position: relative; width: 72px; height: 7px; background: #0f1113; border-radius: 3px; overflow: hidden; border: 1px solid #1f2227; }
 #meter-fill { height: 100%; width: 0%; background: linear-gradient(90deg, #2f9e7a 0%, #b8b23b 75%, #ff5a3d 100%); transition: width 60ms linear; }
 .meter-clip { position: absolute; right: 0; top: 0; width: 6px; height: 100%; background: #3a1512; }
 .meter-clip.on { background: #ff3b2f; box-shadow: 0 0 6px #ff3b2f; }
 .bpm-ctl input {
-  width: 52px; background: var(--screen); color: var(--accent);
+  width: 46px; background: var(--screen); color: var(--accent);
   border: 1px solid var(--panel-edge); border-radius: 4px; padding: 3px 4px;
   font: 600 11px var(--mono); text-align: right;
 }
@@ -425,10 +425,10 @@ body.web .web-only { display: flex !important; }
 .flt-env-btns .pd-btn { font-size: 10px; padding: 4px 8px; }
 .flt-route { flex-direction: column; }
 .flt-route-body { display: flex; align-items: center; gap: 24px; }
-.flt-diagram svg { width: 300px; height: 92px; }
+.flt-diagram svg { width: 300px; height: 100px; }
 .flt-diagram rect { fill: #101215; stroke: var(--accent-dim); stroke-width: 1; }
 .flt-diagram text { fill: var(--text); font: 600 10px var(--sans); text-anchor: middle; letter-spacing: 0.1em; }
-.flt-diagram text.small { fill: var(--faint); font-size: 8px; }
+.flt-diagram text.small { fill: var(--faint); font-size: 8px; letter-spacing: 0.08em; }
 .flt-diagram line { stroke: var(--muted); stroke-width: 1.2; }
 .flt-diagram marker path { fill: var(--muted); }
 .flt-feeds { display: flex; flex-direction: column; gap: 3px; font-family: var(--mono); font-size: 11px; color: var(--faint); }

@@ -137,11 +137,25 @@ struct FxUnitBase
 // ---------------------------------------------------------------------------
 struct DistortionFx : FxUnitBase
 {
+    // The shaper runs at 2x: the input goes through the half-band upsampler, both samples are shaped, the
+    // pair is decimated again. That costs kLatency samples (measured by the tests), so the dry path is delayed
+    // by the same amount and the unit reports it as latency while it is on.
+    static constexpr int kLatency = 3;
     double sr = 48000;
     OnePole toneL, toneR;
-    double holdL = 0, holdR = 0; int holdCount = 0;
+    HalfbandState upL, upR, dnL, dnR;
+    double dryL[kLatency] {}, dryR[kLatency] {};
+    int dryPos = 0;
+    double holdL = 0, holdR = 0; int holdCount = 0, holdCountR = 0;
+    bool oversample = true;   // the tests switch it off to measure what it buys
     void prepare (double s) { sr = s; prepareBase (s); reset(); }
-    void reset() { toneL.reset(); toneR.reset(); holdL = holdR = 0; holdCount = 0; }
+    void reset()
+    {
+        toneL.reset(); toneR.reset(); holdL = holdR = 0; holdCount = holdCountR = 0;
+        upL.reset(); upR.reset(); dnL.reset(); dnR.reset();
+        for (int i = 0; i < kLatency; ++i) dryL[i] = dryR[i] = 0;
+        dryPos = 0;
+    }
 
     static double shape (int type, double x, double drive)
     {
@@ -152,6 +166,13 @@ struct DistortionFx : FxUnitBase
             case driveCrush: { const double step = std::pow (2.0, -(15.0 - 13.0 * drive)); return clampd (std::round (x / step) * step, -1.0, 1.0); }
             default: return std::tanh (x);
         }
+    }
+
+    static inline double held (double& hold, int& count, int holdLen, double w)
+    {
+        if (count <= 0) { hold = w; count = holdLen; }
+        --count;
+        return hold;
     }
 
     void process (double* L, double* R, int n, const std::array<double, kNumParams>& v)
@@ -167,20 +188,40 @@ struct DistortionFx : FxUnitBase
         const double toneCoef = onePoleCoef (400.0 * std::pow (50.0, tone), sr);
         const bool useTone = tone < 0.999;
         const int hold = type == driveCrush ? 1 + (int) (drive * 24.0) : 1;
+        const auto& d = halfband2x();
         for (int i = 0; i < n; ++i)
         {
             const double en = rampEnable (on) * mix;
-            double wl = shape (type, L[i] * gain, drive) * comp, wr = shape (type, R[i] * gain, drive) * comp;
-            if (hold > 1)
+            double wl, wr, dl, dr;
+            if (oversample)
             {
-                if (holdCount <= 0) { holdL = wl; holdR = wr; holdCount = hold; }
-                --holdCount;
-                wl = holdL; wr = holdR;
+                double a0, a1, b0, b1;
+                upL.up (d, L[i], a0, a1);
+                upR.up (d, R[i], b0, b1);
+                a0 = shape (type, a0 * gain, drive) * comp; a1 = shape (type, a1 * gain, drive) * comp;
+                b0 = shape (type, b0 * gain, drive) * comp; b1 = shape (type, b1 * gain, drive) * comp;
+                if (hold > 1)
+                {
+                    a0 = held (holdL, holdCount, hold * 2, a0); a1 = held (holdL, holdCount, hold * 2, a1);
+                    b0 = held (holdR, holdCountR, hold * 2, b0); b1 = held (holdR, holdCountR, hold * 2, b1);
+                }
+                wl = dnL.down (d, a0, a1);
+                wr = dnR.down (d, b0, b1);
+                // the dry signal delayed by the same amount
+                dl = dryL[dryPos]; dr = dryR[dryPos];
+                dryL[dryPos] = L[i]; dryR[dryPos] = R[i];
+                if (++dryPos >= kLatency) dryPos = 0;
+            }
+            else
+            {
+                wl = shape (type, L[i] * gain, drive) * comp; wr = shape (type, R[i] * gain, drive) * comp;
+                if (hold > 1) { wl = held (holdL, holdCount, hold, wl); wr = held (holdR, holdCountR, hold, wr); }
+                dl = L[i]; dr = R[i];
             }
             if (useTone) { wl = toneL.lp (wl, toneCoef); wr = toneR.lp (wr, toneCoef); }
             wl *= out; wr *= out;
-            L[i] += en * (wl - L[i]);
-            R[i] += en * (wr - R[i]);
+            L[i] = dl + en * (wl - dl);
+            R[i] = dr + en * (wr - dr);
         }
     }
 };
@@ -439,9 +480,19 @@ struct EqFx : FxUnitBase
 // ---------------------------------------------------------------------------
 struct CompressorFx : FxUnitBase
 {
-    double sr = 48000, env = 0, limEnv = 0, grDb = 0, limCoefRel = 0.001;
-    void prepare (double s) { sr = s; prepareBase (s); limCoefRel = smoothCoef (0.05, s); reset(); }
-    void reset() { env = 0; limEnv = 1; grDb = 0; }
+    // The limiter looks ahead kLookahead samples (1.3 ms at 48 kHz): the needed gain is the smallest over the
+    // next kLookahead samples, reached with a 0.2 ms attack, so a peak never passes the ceiling. The signal
+    // (and the dry path) is delayed by the same amount while LIMIT is on, reported as latency.
+    static constexpr int kLookahead = 64;
+    double sr = 48000, env = 0, limEnv = 1, grDb = 0, limCoefRel = 0.001, limCoefAtt = 0.1;
+    double laL[kLookahead] {}, laR[kLookahead] {}, dryL[kLookahead] {}, dryR[kLookahead] {}, need[kLookahead] {};
+    int laPos = 0;
+    void prepare (double s) { sr = s; prepareBase (s); limCoefRel = smoothCoef (0.05, s); limCoefAtt = smoothCoef (0.0002, s); reset(); }
+    void reset()
+    {
+        env = 0; limEnv = 1; grDb = 0; laPos = 0;
+        for (int i = 0; i < kLookahead; ++i) { laL[i] = laR[i] = dryL[i] = dryR[i] = 0; need[i] = 1; }
+    }
     double gainReductionDb() const { return grDb; }   // the deepest reduction since the last call to takeGr()
     double takeGr() { const double g = grDb; grDb = 0; return g; }
 
@@ -465,20 +516,28 @@ struct CompressorFx : FxUnitBase
             const double red = over > 0 ? over * (1.0 - 1.0 / ratio) : 0.0;
             double g = dbToGain (-red) * makeup;
             double wl = L[i] * g, wr = R[i] * g;
+            double dl = L[i], dr = R[i];
             if (limit)
             {
+                // this sample and its needed gain go in; the sample from kLookahead ago comes out
                 const double p = std::max (std::abs (wl), std::abs (wr));
-                const double need = p > ceiling ? ceiling / p : 1.0;
-                // instant attack, 50 ms release
-                limEnv = need < limEnv ? need : limEnv + (need - limEnv) * limCoefRel;
+                need[laPos] = p > ceiling ? ceiling / p : 1.0;
+                const double outL = laL[laPos], outR = laR[laPos];
+                laL[laPos] = wl; laR[laPos] = wr;
+                dl = dryL[laPos]; dr = dryR[laPos];
+                dryL[laPos] = L[i]; dryR[laPos] = R[i];
+                if (++laPos >= kLookahead) laPos = 0;
+                double target = 1.0;
+                for (int k = 0; k < kLookahead; ++k) target = std::min (target, need[k]);
+                limEnv += (target - limEnv) * (target < limEnv ? limCoefAtt : limCoefRel);
                 if (limEnv > 1.0) limEnv = 1.0;
-                wl *= limEnv; wr *= limEnv;
+                wl = outL * limEnv; wr = outR * limEnv;
                 g *= limEnv;
             }
             const double totalRed = -20.0 * std::log10 (std::max (g / makeup, 1e-9));
             if (totalRed > grDb) grDb = totalRed;
-            L[i] += en * (wl - L[i]);
-            R[i] += en * (wr - R[i]);
+            L[i] = dl + en * (wl - dl);
+            R[i] = dr + en * (wr - dr);
         }
     }
 };
@@ -528,6 +587,11 @@ public:
     }
 
     double takeGainReduction() { return comp.takeGr(); }
+    // samples of delay the chain adds with these switches (the oversampled distortion, the limiter's lookahead)
+    static int latencyFor (bool distortionOn, bool limiterOn)
+    {
+        return (distortionOn ? DistortionFx::kLatency : 0) + (limiterOn ? CompressorFx::kLookahead : 0);
+    }
 
     DistortionFx dist;
     ChorusFx chorus;

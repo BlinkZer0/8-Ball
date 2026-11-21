@@ -198,7 +198,7 @@ parity test: the browser runs the same compiled code as the plugin.
 |---|---|
 | `EightBallTests.exe` | parameter table, presets, file round trip (with model blocks), old / partial / garbage files, and the engine checks: wavetables, envelopes, operators, the matrix, filters, voice modes, bypass switches, clicks, stuck notes, aliasing, oversampling, the model hand-off |
 | `--dump-params` | C++ parameter table as JSON (diffed by `check-params.ps1`) |
-| `--bench` | CPU for 16 voices x 8 operators (unison 1, 2x oversampling, unison 4) and a 2-op patch |
+| `--bench [case]` | CPU for 16 voices x 8 operators (unison 1, 2x oversampling, unison 4), a 2-op patch, the FX chain; one case at a time with an index |
 | `--loudness` | loudness of every factory preset (level matching) |
 | `--render "<Category/Name>" out.wav [seconds] [note]` | renders a preset to a WAV, for listening without a DAW |
 | `--host-check "<path to .vst3>"` | loads the built VST3 like a DAW: scan, parameters, sound, automation, state round trip |

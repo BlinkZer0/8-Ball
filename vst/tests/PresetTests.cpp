@@ -2,7 +2,7 @@
 // Build + run:  cmake --build <build> --config Release --target EightBallTests
 //   EightBallTests.exe                 parameter table, presets, files, engine checks
 //   EightBallTests.exe --dump-params   the C++ parameter table as JSON (tests/check-params.ps1)
-//   EightBallTests.exe --bench         CPU: 16 voices x 8 operators
+//   EightBallTests.exe --bench [case]  CPU: 16 voices x 8 operators (one case only with an index)
 //   EightBallTests.exe --loudness      loudness of every factory preset (level matching)
 //   EightBallTests.exe --render "<Category/Name>" out.wav [seconds] [note]
 //   EightBallTests.exe --host-check "<path to Eight Ball.vst3>"
@@ -17,7 +17,7 @@ int failures = 0;
 #define CHECKF(cond, ...) do { if (! (cond)) { ++failures; std::printf ("FAIL %s:%d  %s  ", __FILE__, __LINE__, #cond); std::printf (__VA_ARGS__); std::printf ("\n"); } } while (0)
 
 int runEngineTests();
-int runBench();
+int runBench (int only);
 int runLoudness();
 int runRender (const juce::String& preset, const juce::File& out, double seconds, int note);
 int runHostCheck (const juce::String& path);
@@ -180,7 +180,7 @@ int main (int argc, char* argv[])
         std::printf ("%s\n", juce::JSON::toString (paramTableToJson(), true).toRawUTF8());
         return 0;
     }
-    if (argc >= 2 && juce::String (argv[1]) == "--bench") return runBench();
+    if (argc >= 2 && juce::String (argv[1]) == "--bench") return runBench (argc >= 3 ? juce::String (argv[2]).getIntValue() : -1);
     if (argc >= 2 && juce::String (argv[1]) == "--loudness") return runLoudness();
     if (argc >= 4 && juce::String (argv[1]) == "--render")
         return runRender (argv[2], juce::File::getCurrentWorkingDirectory().getChildFile (juce::String (argv[3])),

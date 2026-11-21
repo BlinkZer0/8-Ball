@@ -146,22 +146,25 @@ class FiltersPage {
     const box = (x, y, t) => `<rect x="${x}" y="${y}" width="44" height="22" rx="4"/><text x="${x + 22}" y="${y + 15}">${t}</text>`;
     const arrow = (x1, y1, x2, y2) => `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" marker-end="url(#fltArrow)"/>`;
     const defs = `<defs><marker id="fltArrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0 0 L10 5 L0 10 z"/></marker></defs>`;
+    // "ops" on the left feed the filters; an extra "ops" arrow from above where a later filter has its own input
+    const inLabel = (x, y) => `<text class="small" x="${x}" y="${y}">ops</text>`;
+    const feed = (x, y) => arrow(x, y - 26, x, y - 2) + `<text class="small" x="${x + 4}" y="${y - 14}" text-anchor="start">ops</text>`;
     let body = '';
     if (r === 0) { // parallel
-      body = box(50, 4, 'F1') + box(50, 34, 'F2') + box(50, 64, 'F3') + box(200, 34, 'OUT')
-        + arrow(10, 15, 48, 15) + arrow(10, 45, 48, 45) + arrow(10, 75, 48, 75)
-        + arrow(96, 15, 198, 42) + arrow(96, 45, 198, 45) + arrow(96, 75, 198, 48);
+      body = box(60, 6, 'F1') + box(60, 36, 'F2') + box(60, 66, 'F3') + box(210, 36, 'OUT')
+        + inLabel(18, 44) + arrow(30, 17, 58, 17) + arrow(30, 47, 58, 47) + arrow(30, 77, 58, 77)
+        + arrow(106, 17, 208, 43) + arrow(106, 47, 208, 47) + arrow(106, 77, 208, 51);
     } else if (r === 1) { // series
-      body = box(40, 34, 'F1') + box(110, 34, 'F2') + box(180, 34, 'F3') + box(250, 34, 'OUT')
-        + arrow(6, 45, 38, 45) + arrow(86, 45, 108, 45) + arrow(156, 45, 178, 45) + arrow(226, 45, 248, 45)
-        + arrow(96, 10, 118, 32) + arrow(166, 10, 188, 32)
-        + `<text class="small" x="96" y="7">op › F2</text><text class="small" x="166" y="7">op › F3</text>`;
+      body = box(44, 46, 'F1') + box(114, 46, 'F2') + box(184, 46, 'F3') + box(254, 46, 'OUT')
+        + inLabel(12, 60) + arrow(24, 57, 42, 57) + arrow(90, 57, 112, 57) + arrow(160, 57, 182, 57) + arrow(230, 57, 252, 57)
+        + feed(136, 46) + feed(206, 46);
     } else { // 1+2 > 3
-      body = box(50, 10, 'F1') + box(50, 58, 'F2') + box(150, 34, 'F3') + box(250, 34, 'OUT')
-        + arrow(10, 21, 48, 21) + arrow(10, 69, 48, 69) + arrow(96, 21, 148, 42) + arrow(96, 69, 148, 48)
-        + arrow(196, 45, 248, 45) + arrow(120, 90, 148, 52) + `<text class="small" x="120" y="88">op › F3</text>`;
+      body = box(60, 14, 'F1') + box(60, 62, 'F2') + box(170, 46, 'F3') + box(254, 46, 'OUT')
+        + inLabel(18, 50) + arrow(30, 25, 58, 25) + arrow(30, 73, 58, 73)
+        + arrow(106, 25, 168, 53) + arrow(106, 73, 168, 61) + arrow(216, 57, 252, 57)
+        + feed(192, 46);
     }
-    this.diagram.innerHTML = `<svg viewBox="0 0 300 92">${defs}${body}</svg>`;
+    this.diagram.innerHTML = `<svg viewBox="0 0 300 100">${defs}${body}</svg>`;
     // which operators feed each filter (from the output column)
     const parts = [];
     for (let f = 0; f < NUM_FILTERS; f++) {

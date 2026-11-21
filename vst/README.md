@@ -54,13 +54,15 @@ named twice runs once, units left out run last). Each unit computes `out = dry +
 `enable` follows the ON switch with a 3 ms time constant, so switching crossfades, and a unit that has settled off
 is skipped and its state cleared, so it is a true bypass. Distortion: gain 1 + 30·drive² into tanh / hard clip /
 sine fold / bit-crush (with sample hold), level-compensated, a one-pole tone (400 Hz … 20 kHz), output gain.
-Chorus: two modulated delay lines (sine LFO, the right channel offset by spread × 90°). Phaser: 4 / 8 / 12
+The shaper runs 2× oversampled (the half-band pair from the voice path, used as up- and downsampler), which costs
+2 samples; the dry path is delayed to match. Chorus: two modulated delay lines (sine LFO, the right channel offset by spread × 90°). Phaser: 4 / 8 / 12
 first-order all-passes swept ±2 octaves around the centre (200 Hz … 4 kHz), feedback, the right channel 90° apart.
 Delay: 2 s stereo lines, the time smoothed over 50 ms (so changes glide, no clicks), tone at the output, ping-pong
 (mono in, L → R → L). Reverb: Freeverb-style 8 damped combs + 4 all-passes per channel, size scaling the comb
 lengths (smoothed), pre-delay up to 200 ms, width. EQ: RBJ biquads, recomputed per chunk from the smoothed knobs,
 unused bands skipped. Compressor: peak detector with attack / release, threshold / ratio, makeup, an optional
-limiter (instant attack, 50 ms release, −0.3 dBFS ceiling), gain reduction reported to the UI.
+limiter (64 samples of lookahead: the gain reaches the smallest needed over the next 1.3 ms with a 0.2 ms attack, 50 ms
+release, −0.3 dBFS ceiling; the signal and the dry path are delayed by the lookahead), gain reduction reported to the UI.
 
 Operators run in index order. A PM cell from a lower-numbered operator uses this sample's output, from a
 higher-numbered one the last sample's; self-feedback averages the last two samples. A cell's depth d gives
@@ -81,7 +83,9 @@ them, are rendered. Filters nothing has fed during a note are skipped.
   all notes off / all sound off; events are applied at the exact sample. Learned CCs become parameter changes the
   host sees. CC 0, 1, 32, 64 and 120+ can't be learned.
 - **Host tempo** drives tempo-synced envelopes and LFOs; synced LFOs follow the song position while playing.
-- **Latency:** 0 samples, 1 sample with 2× oversampling on (reported to the host).
+- **Latency:** 0 samples; 1 sample with 2× oversampling on, 2 with the distortion on (its shaper is oversampled),
+  64 (1.3 ms at 48 kHz) with the limiter on (its lookahead); always reported to the host, and updated when a
+  switch changes.
 - **State:** the project saves every parameter, the model (waves, envelopes, LFO shapes), the preset name and the
   MIDI-learn map.
 
@@ -152,7 +156,7 @@ Build with `build.bat`, then run from `%LOCALAPPDATA%\EightBallVST\build\EightBa
 |---|---|
 | `EightBallTests.exe` | parameter table (count, index helpers, unique ids, neutral defaults for later milestones, the mod-destination list), presets (factory incl. `modDst`, round trip with model blocks, partial and garbage files), wavetables (normalisation, mip selection, drawn-shape DFT), envelopes (shapes, sustain, release and retrigger fades, loops, one-shots), operators (pitch of every mode, velocity, pan, every starter wave, custom waves, mute / solo / level / output column), matrix (PM sidebands, feedback, cells from higher-numbered operators, stacks, ring mod, the active-operator logic), filters (every type and slope, bypass = exact dry, mix 0, resonance, key tracking, envelope, velocity, every routing, drive), voices (polyphony and stealing, mono, legato and portamento, sustain, no stuck notes, panic, bend, envelopes, tempo sync), quality (phase reset, unison beating and spread, oversampling bypass and delay, aliasing of tables and of modulated high notes, clicks on level / ratio / depth jumps, the safety clipper, the model hand-off), LFOs + mod matrix (tremolo rate, tempo sync at two tempos, delay fade, square / S&H / drawn / phase, bypass: LFO off, slot off, amount 0, depth 0, no destination = bit-identical to the plain render; velocity → cutoff, key → level per voice, an envelope as a source, the wheel, two slots adding up, a global destination, the stats, no clicks with an LFO on a resonant cutoff), FX chain (every unit off and every unit at mix 0 bit-identical to no chain; distortion harmonics, tone and types; chorus width and level; the phaser's sweeping notch; delay echo timing, feedback, sync at two tempos, ping-pong, tone; reverb tail, decay, pre-delay, width; every EQ band; compression, the gain-reduction stat, the limiter ceiling; the chain order and its resolution; a click-free switch-on of every unit; off again mid-note = exactly the plain path), every factory preset through a full note |
 | `--dump-params` | the C++ table as JSON; `tests\check-params.ps1` diffs it against params.js |
-| `--bench` | 16 voices × 8 operators: 7.9% of one core (14.4% with 2× OS, 14.9% with unison 4, 8.9% with all 7 FX on); 2 ops: 2.6%; the FX alone 0.9% |
+| `--bench [case]` | 16 voices × 8 operators: 8.2% of one core (14.9% with 2× OS, 16.1% with unison 4, 9.2% with all 7 FX on); 2 ops: 2.7%; the FX alone 1.0%. Time one case at a time (`--bench 3`) with the machine idle: this laptop's turbo clock drops a few seconds into a full pass |
 | `--loudness` | loudness of every factory preset (level matching, milestone 5) |
 | `--render "<Category/Name>" out.wav [seconds] [note]` | a preset to a WAV |
 | `--host-check "<path>\Eight Ball.vst3"` | loads the built VST3 like a DAW: scan, every parameter with a name and text, sound, automation during playback, state round trip into a fresh instance |

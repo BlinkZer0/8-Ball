@@ -5,7 +5,8 @@ using namespace eightball;
 using namespace eightball::test;
 
 // CPU: 16 voices x 8 operators (the brief's target), measured as % of one core for 10 s of audio.
-int runBench()
+// --bench [case]: one case only (0-based), so a case can be timed before the CPU's turbo window ends.
+int runBench (int only)
 {
     struct Case { const char* name; int unison; bool os; int ops; bool fx; };
     const Case cases[] {
@@ -16,8 +17,10 @@ int runBench()
         { "16 voices x 8 ops, unison 1, all 7 FX units on", 1, false, 8, true },
         { "silence, all 7 FX units on (the FX alone)", 1, false, 0, true },
     };
+    int caseIndex = 0;
     for (const auto& c : cases)
     {
+        if (only >= 0 && caseIndex++ != only) continue;
         Patch p;
         p.set ("poly", 16).set ("oversample", c.os ? 1.0f : 0.0f);
         if (c.fx) for (const char* u : { "dstOn", "choOn", "phaOn", "dlyOn", "revOn", "eqOn", "cmpOn" }) p.set (u, 1);

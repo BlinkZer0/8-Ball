@@ -364,6 +364,8 @@ public:
     double takeGainReduction() { return fx.takeGainReduction(); }
     const FxChain& effects() const { return fx; }
     static int latencySamples (bool os) { return os ? HalfbandState::kLatency2x : 0; }
+    // the whole plugin's latency for these switch states
+    static int latencyFor (bool os, bool distortionOn, bool limiterOn) { return latencySamples (os) + FxChain::latencyFor (distortionOn, limiterOn); }
 
 private:
     static int clampi (int v, int lo, int hi) { return v < lo ? lo : (v > hi ? hi : v); }
@@ -372,6 +374,7 @@ private:
     // a voice's view of a parameter: the mod matrix's per-voice result, or the global value
     double pv (const Voice& v, int i) const
     {
+        if (v.numOv == 0) return val[(size_t) i];   // the common case: no per-voice modulation this chunk
         for (int j = 0; j < v.numOv; ++j) if (v.ovParam[(size_t) j] == i) return v.ovVal[(size_t) j];
         return val[(size_t) i];
     }

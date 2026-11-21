@@ -100,6 +100,7 @@ private:
     bool handleLearn (const juce::MidiMessage&);
     void pushParamChange (int index, float value);
     void timerCallback() override;   // applies MIDI-learned changes on the message thread; reports latency
+    int currentLatency() const;      // oversampling + distortion + limiter lookahead
     juce::String learnStateString() const;
     void restoreLearnState (const juce::String&);
 

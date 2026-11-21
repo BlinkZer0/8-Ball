@@ -89,11 +89,12 @@ The plan, the milestones and the measured results are in [docs/PLAN.md](docs/PLA
   delay) act per voice. Knobs that are being modulated carry a marker.
 
 **FX** (FX page; global, after the voices, before the master)
-- **Distortion** (soft, hard, fold, bit-crush; drive, tone, output), **Chorus** (rate, depth, delay, feedback,
+- **Distortion** (soft, hard, fold, bit-crush; drive, tone, output; the shaper runs 2× oversampled), **Chorus** (rate, depth, delay, feedback,
   stereo spread), **Phaser** (4 / 8 / 12 stages, rate, depth, centre, feedback), **Delay** (ms or a tempo
   division, feedback, ping-pong, tone), **Reverb** (size, decay, damping, pre-delay, width), **EQ** (low cut,
   high cut, low shelf, mid peak with Q, high shelf, with a response curve), **Compressor** (threshold, ratio,
-  attack, release, makeup, a gain-reduction meter) with a **limiter** at −0.3 dBFS.
+  attack, release, makeup, a gain-reduction meter) with a **limiter** at −0.3 dBFS that looks 1.3 ms ahead, so
+  nothing passes the ceiling.
 - Every unit has **ON** (a true bypass: off, it costs nothing and the output is bit-identical to a chain without
   it; switching crossfades over 10 ms so it never clicks) and **MIX**.
 - **Drag a unit** in the chain bar or by its handle to reorder the chain.
@@ -156,14 +157,15 @@ Build details, the bridge between the UI and C++, tests and troubleshooting are 
 
 | case | % of one core |
 |---|---|
-| 16 voices × 8 operators, unison 1 (all carriers + 4 PM cells) | 7.9% |
-| the same with 2× oversampling | 14.4% |
-| 16 voices × 8 operators, unison 4 | 14.9% |
-| 16 voices × 2 operators | 2.6% |
-| 16 voices × 8 operators with all 7 FX units on | 8.9% |
-| the FX chain alone (all 7 on, silence in) | 0.9% |
+| 16 voices × 8 operators, unison 1 (all carriers + 4 PM cells) | 8.2% |
+| the same with 2× oversampling | 14.9% |
+| 16 voices × 8 operators, unison 4 | 16.1% |
+| 16 voices × 2 operators | 2.7% |
+| 16 voices × 8 operators with all 7 FX units on | 9.2% |
+| the FX chain alone (all 7 on, silence in) | 1.0% |
 
-(the figures move by about ±0.5 between runs; milestone 1 read 7.8 / 14.1 / 14.8 / 2.5%)
+(each case timed on its own after 20 s of idle: on this laptop the turbo clock drops about 2.5 s into a run and a
+back-to-back pass reads the later cases up to twice as slow; milestone 1 read 7.8 / 14.1 / 14.8 / 2.5%)
 
 Automated checks (all passing): the parameter table and the preset files, 10 groups of engine checks (wavetables,
 envelopes, operators, matrix, filters, voices, quality: bypass switches, clicks, stuck notes, aliasing,

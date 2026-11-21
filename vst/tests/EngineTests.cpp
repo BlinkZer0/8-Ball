@@ -738,7 +738,12 @@ void fxTests()
          .set ("eqLowGain", 18).set ("eqHighCut", 1000).set ("cmpThresh", -60).set ("cmpRatio", 20);
         CHECKF (maxDiff (play (p), ref) == 0.0, "%s off is not a bypass", units[u]);
         p.set ((std::string (units[u]) + "On").c_str(), 1).set ((std::string (units[u]) + "Mix").c_str(), 0);
-        CHECKF (maxDiff (play (p), ref) == 0.0, "%s mix 0 is not dry", units[u]);
+        // mix 0 is exactly dry; the oversampled distortion's dry path is delayed by its (reported) latency
+        const int lag = u == fxDistortion ? DistortionFx::kLatency : 0;
+        auto mix0 = play (p);
+        double worstMix = 0;
+        for (size_t i = 0; i + (size_t) lag < mix0.L.size(); ++i) worstMix = std::max (worstMix, (double) std::abs (mix0.L[i + (size_t) lag] - ref.L[i]));
+        CHECKF (worstMix == 0.0, "%s mix 0 is not dry (differs by %g)", units[u], worstMix);
     }
     // every unit on at its defaults renders finite, non-silent audio
     {
@@ -863,7 +868,7 @@ void fxTests()
     }
     p = Patch().set ("master", 1).set ("cmpOn", 1).set ("cmpThresh", 0).set ("cmpMakeup", 18).set ("cmpLimit", 1);
     r = render (p, 563, { on (1, 60), on (1, 64), on (1, 67), on (1, 72) });
-    CHECKF (r.peak <= dbToGain (-0.3) + 0.02 && rms (r.mono(), kA, kB) > 0.3, "limiter peak %g rms %g", r.peak, rms (r.mono(), kA, kB));
+    CHECKF (r.peak <= dbToGain (-0.3) + 0.005 && rms (r.mono(), kA, kB) > 0.3, "limiter peak %g rms %g", r.peak, rms (r.mono(), kA, kB));
     p.set ("cmpLimit", 0);
     CHECK (render (p, 563, { on (1, 60), on (1, 64), on (1, 67), on (1, 72) }).peak > 0.99);   // without it the clipper has to catch it
 
@@ -883,6 +888,68 @@ void fxTests()
         v[(size_t) fxOrderParam (0)] = fxReverb; v[(size_t) fxOrderParam (1)] = fxReverb;
         FxChain::resolveOrder (v, order);
         CHECK (order[0] == fxReverb && order[1] == fxDistortion && order[6] == fxCompressor);
+    }
+
+    // the half-band upsampler: a 1 kHz sine at 48 kHz becomes a clean 1 kHz sine at 96 kHz (image at 47 kHz gone)
+    {
+        HalfbandState up;
+        const auto& d = halfband2x();
+        std::vector<float> x2 (2 * 48000);
+        for (int i = 0; i < 48000; ++i)
+        {
+            double u0, u1;
+            up.up (d, std::sin (kTwoPi * 1000.0 * i / 48000.0), u0, u1);
+            x2[(size_t) (2 * i)] = (float) u0; x2[(size_t) (2 * i + 1)] = (float) u1;
+        }
+        const double want = magAt (x2, 48000, 96000, 1000, 96000), image = magAt (x2, 48000, 96000, 47000, 96000);
+        CHECKF (dB (image) - dB (want) < -55, "upsampler image %g dB", dB (image) - dB (want));
+    }
+    // the oversampled distortion: drive 0 (a unity shaper) returns the input delayed by exactly kLatency samples
+    {
+        Patch q = Patch().set ("dstOn", 1).set ("dstDrive", 0).set ("dstMix", 1);
+        auto wet = play (q);
+        int bestShift = -1; double bestErr = 1e9;
+        for (int shift = 0; shift < 8; ++shift)
+        {
+            double err = 0, e0 = 0;
+            for (size_t i = kA; i < kB; ++i) { err += std::pow (wet.L[i + (size_t) shift] - ref.L[i], 2.0); e0 += std::pow (ref.L[i], 2.0); }
+            if (std::sqrt (err / e0) < bestErr) { bestErr = std::sqrt (err / e0); bestShift = shift; }
+        }
+        CHECKF (bestShift == DistortionFx::kLatency && bestErr < 0.02, "distortion delay %d (declared %d), residual %g", bestShift, DistortionFx::kLatency, bestErr);
+    }
+    // ...and it removes most of the aliasing of a hard clip on a high note (the unit alone, with and without 2x)
+    {
+        std::array<double, kNumParams> v {};
+        for (int i = 0; i < kNumParams; ++i) v[(size_t) i] = paramDef (i).def;
+        v[dstOn] = 1; v[dstType] = driveHard; v[dstDrive] = 1; v[dstMix] = 1; v[dstTone] = 1;
+        auto run = [&] (bool os)
+        {
+            DistortionFx fx;
+            fx.prepare (kSr);
+            fx.oversample = os;
+            std::vector<float> out (48000);
+            std::vector<double> L (kChunk), R (kChunk);
+            for (int b = 0; b < 48000 / kChunk; ++b)
+            {
+                for (int i = 0; i < kChunk; ++i) L[(size_t) i] = R[(size_t) i] = 0.9 * std::sin (kTwoPi * 1319.0 * (b * kChunk + i) / kSr);
+                fx.process (L.data(), R.data(), kChunk, v);
+                for (int i = 0; i < kChunk; ++i) out[(size_t) (b * kChunk + i)] = (float) L[(size_t) i];
+            }
+            double alias = 0;
+            for (double f = 200; f < 1200; f += 25) alias += magAt (out, 24000, 48000, f);
+            return alias;
+        };
+        const double aliasPlain = run (false), aliasOs = run (true);
+        CHECKF (aliasOs < 0.35 * aliasPlain, "distortion aliasing plain %g vs 2x %g", aliasPlain, aliasOs);
+    }
+    // the limiter's lookahead: with nothing to limit, LIMIT delays the signal by exactly kLookahead samples
+    {
+        Patch q = Patch().set ("cmpOn", 1).set ("cmpThresh", 0).set ("cmpRatio", 1).set ("cmpLimit", 1);
+        auto wet = play (q);
+        double worst = 0;
+        for (size_t i = kA; i < kB; ++i) worst = std::max (worst, (double) std::abs (wet.L[i + CompressorFx::kLookahead] - ref.L[i]));
+        CHECKF (worst < 1e-6, "limiter delay: differs by %g at %d samples", worst, CompressorFx::kLookahead);
+        CHECK (SynthEngine::latencyFor (false, false, false) == 0 && SynthEngine::latencyFor (true, true, true) == HalfbandState::kLatency2x + DistortionFx::kLatency + CompressorFx::kLookahead);
     }
 
     // switching a unit on mid-note crossfades: the transition has no step larger than the sound before or after it
