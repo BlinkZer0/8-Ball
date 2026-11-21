@@ -141,6 +141,21 @@
     $$('.page-tab').find(t => t.dataset.page === 'presets').click();
     check($('.page[data-page="presets"]').classList.contains('active'), 'presets page shows');
     check($$('.cat-tab').length === 3 && $$('.preset-btn').length >= 1, `preset browser: ${$$('.cat-tab').length} categories`);
+    // a big library scrolls inside the browser; the panel keeps the size the OPERATORS page gives it
+    const synthH = $('.synth').offsetHeight;
+    const big = [];
+    for (let i = 0; i < 400; i++) big.push({ id: `factory:${i + 3}`, name: `Wob ${i} Test`, category: 'Dubstep Bass', factory: true });
+    (listeners.presetList || []).forEach(f => f({ presets: [{ id: 'factory:0', name: 'Init', category: 'Init', factory: true }, ...big], folder: 'C:\\x' }));
+    $$('.cat-tab').find(t => t.textContent.startsWith('Dubstep')).click();
+    const grid = $('#preset-grid');
+    check($$('.preset-btn').length === 400 && grid.scrollHeight > grid.clientHeight + 200 && $('.synth').offsetHeight === synthH,
+          `400 presets scroll inside the browser (scroll ${grid.scrollHeight} in ${grid.clientHeight}), panel height unchanged (${$('.synth').offsetHeight} vs ${synthH})`);
+    (listeners.presetList || []).forEach(f => f({ presets: [
+      { id: 'factory:0', name: 'Init', category: 'Init', factory: true },
+      { id: 'factory:1', name: 'Tine Piano', category: 'E-Pianos & Bells', factory: true },
+      { id: 'user:My Sound.ebpreset', name: 'My Sound', category: 'User', factory: false },
+    ], folder: 'C:\\Users\\me\\Documents\\Eight Ball\\Presets' }));
+    $$('.cat-tab').find(t => t.textContent.startsWith('Init')).click();
     const srch = $('#preset-search');
     srch.value = 'tine'; srch.dispatchEvent(new Event('input'));
     check($$('.preset-btn').length === 1 && /Tine Piano/.test($$('.preset-btn')[0].textContent) && /1 of 3 match/.test($('#preset-count').textContent), 'search finds Tine Piano across categories');
