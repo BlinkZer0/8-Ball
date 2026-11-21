@@ -1,8 +1,9 @@
 # Eight Ball: build plan
 
-Status (2026-11-20): **milestone 5 built**: the full synth from milestones 1-4 plus 220 level-matched factory
-presets generated from recipes (`presets/make_presets.py`), a per-preset level trim parameter, A/B compare. All
-automated checks pass; waiting for hand-testing in Minihost Modular.
+Status (2026-11-20): **milestone 5 built**: the full synth from milestones 1-4 plus 1044 level-matched factory
+presets generated from 8-operator recipes (`presets/make_presets.py`), a per-preset level trim parameter, A/B
+compare, preset search, an ON button per operator. All automated checks pass; waiting for hand-testing in Minihost
+Modular.
 
 The brief's milestones, each ending with a stop for hand-testing:
 
@@ -12,7 +13,7 @@ The brief's milestones, each ending with a stop for hand-testing:
 | 2 | Filters + articulators + LFOs | the FILTERS page, the multi-point envelope editor, 4 LFOs, the 16-slot mod matrix | **done** |
 | 3 | FX tab | Distortion, Chorus, Phaser, Delay, Reverb, EQ, Compressor / Limiter with drag-to-reorder | **done** |
 | 4 | Full UI + animated matrix | the harmonic editor and drawn shapes, glowing cells, per-operator scopes, signal-flow lines, Animate toggle | **done** |
-| 5 | Presets | 220 factory presets (the brief said 64; the user asked for 200: ~40 acoustic instruments, the rest electronic with a dubstep focus), level-matched, A/B compare | **done** |
+| 5 | Presets | 1044 factory presets (the brief said 64; the user then asked for 200, then about 1000, built on 8-operator architectures that show the matrix off), level-matched, A/B compare | **done** |
 | 6 | HTML build | the DSP core compiled to WebAssembly, Web Audio + Web MIDI, the same UI and presets | |
 
 ## Milestone 1 notes
@@ -222,8 +223,15 @@ screen):
 `wobble()` with division / LFO shape / filter / distortion arguments, `growl()` with two formant band-passes, a
 `lead()`, `pad()`, `pluck()`, `stab()`, `organ()`, a `drum()` and `fx()` wrapper) and every preset in a family sets
 its own character. The script asserts unique names and at least 200 presets and writes `factory_presets.json`
-(never edit the JSON). 220 presets, 12 categories: the user asked for about 30 acoustic instruments (there are 40:
-pianos, strings, winds, brass, guitars, mallets, organ, choir, accordion) and the rest electronic, heavy on dubstep.
+(never edit the JSON). 1044 presets, 12 categories. Second round (after the user asked for about 1000 presets
+that use more operators): every family is now an 8-operator architecture (a piano has three carriers with their
+own modulators, a shared hammer and a soundboard sub; the dubstep bass has a saw carrier with feedback, its
+octave, a ring-modulated formant carrier into filter 2, a sine sub to Dry and a transient click; pads have three
+detuned carriers, a fifth and a slow index modulator; leads a 3-op stack, an octave carrier, a ring cell on the
+wheel, a sub and breath noise; drums a pitch-dropping body, a knock, a click pair and noise). Variants are deep
+copies with a modifier (`variant(base, 'Wide', mod_wide)` …) and the dubstep grid is divisions × LFO shapes ×
+filter types × clean / dirty plus vowels × divisions. `make_presets.py` asserts that every preset has at least five
+operators in the signal path (three for drum hits and noise effects).
 
 **Level matching:** a new parameter `presetGain` (dB, after the FX, before the master; the TRIM knob in the global
 strip) carries each preset's trim. `EightBallTests --presets <file> --loudness` measures every preset from a JSON
@@ -231,8 +239,10 @@ file without rebuilding (loudest 100 ms RMS at master 1: a C4 E4 G4 chord at vel
 mono presets, one C3 for drums and FX; the note is released after 2 s so one-shots and releases count too), and
 `make_presets.py --match <that output>` moves every trim so the measurement lands at -18 dBFS, holding a trim back
 when it would put the peak above -1 dBFS (the compressor / limiter in a chain keeps the loop from converging
-exactly, so the match runs three times). Result: 219 of 219 trimmed presets within +-0.5 dB of -18 dBFS except
-Hi-Hat Closed (-19.7 dB, held back by the peak guard); trims range from -15.5 to +12 dB; no peak above 0.95. Trims are stored in `presets/trims.json` and re-applied on every generation.
+exactly, so the match runs three times; drum hits and effects are measured on a 40 ms window, everything else
+on 100 ms). Result for the 1044-preset library: 1029 of 1043 trimmed presets within +-0.5 dB of -18 dBFS, the
+rest within 1.4 dB (the kicks read 0.6 dB high because their own limiter pushes back, two hats and a tick are
+held by the peak guard); trims range from -12.4 to +12 dB. Trims are stored in `presets/trims.json` and re-applied on every generation.
 
 **A/B compare** (host side): `abToggle` snapshots the current sound (parameters, model, preset name), applies the
 other slot and keeps the snapshot as the new other slot; the first flip therefore gives two copies. `abCopy`

@@ -61,7 +61,7 @@ int runBench (int only)
     return 0;
 }
 
-// Loudest 100 ms window (RMS) of a 3 s phrase at velocity 100 with the master at 1: a chord (C4 E4 G4) for
+// Loudest 100 ms window (RMS; 40 ms for drums and FX) of a 3 s phrase at velocity 100 with the master at 1: a chord (C4 E4 G4) for
 // polyphonic sounds, one note for basses (C1), mono presets (C1), drums and FX (C3). The preset's own level
 // trim (presetGain) is included, so after level matching every line reads near the target.
 int runLoudness()
@@ -88,8 +88,10 @@ int runLoudness()
         if (! bass && ! hit) { ev[3] = off (blocks * 2 / 3, 60); ev[4] = off (blocks * 2 / 3, 64); ev[5] = off (blocks * 2 / 3, 67); }
         auto r = render (p, blocks, ev);
         const auto m = r.mono();
+        // loudest window: 100 ms, or 40 ms for drum hits and effects (a hat is shorter than 100 ms)
+        const size_t win = hit ? 1920 : 4800;
         double best = 0;
-        for (size_t i = 0; i + 4800 <= m.size(); i += 1200) best = std::max (best, rms (m, i, i + 4800));
+        for (size_t i = 0; i + win <= m.size(); i += win / 4) best = std::max (best, rms (m, i, i + win));
         std::printf ("  { \"index\": %d, \"name\": \"%s\", \"category\": \"%s\", \"rms\": %.5f, \"dB\": %.2f, \"peak\": %.3f, \"trim\": %.2f }%s\n",
                      (int) pi, f[pi].name.toRawUTF8(), f[pi].category.toRawUTF8(), best, dB (best), r.peak,
                      std::isnan (f[pi].values[presetGain]) ? 0.0 : f[pi].values[presetGain], pi + 1 < f.size() ? "," : "");

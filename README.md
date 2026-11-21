@@ -9,7 +9,7 @@ same way.
 
 | Build | Where | Status |
 |---|---|---|
-| **VST3 plugin** + Standalone | [`vst/`](vst/README.md) | milestone 5: the full synth (8 operators with the wave editor, the matrix, filters, envelopes, LFOs, mod matrix, FX chain, animated matrix), 220 level-matched factory presets, A/B compare; all automated checks pass |
+| **VST3 plugin** + Standalone | [`vst/`](vst/README.md) | milestone 5: the full synth (8 operators with the wave editor, the matrix, filters, envelopes, LFOs, mod matrix, FX chain, animated matrix), 1044 level-matched factory presets built on 8-operator architectures, A/B compare, preset search; all automated checks pass |
 | **Web build** | `web/index.html` | milestone 6 |
 
 The plan, the milestones and the measured results are in [docs/PLAN.md](docs/PLAN.md). The house rules are in
@@ -45,8 +45,11 @@ The plan, the milestones and the measured results are in [docs/PLAN.md](docs/PLA
 - **Level**, **pan**, **velocity** sensitivity.
 - **Unison** 1–8 sub-oscillators with **detune** and stereo **spread** (constant-power sum).
 - **Phase reset** on (identical attacks) or off (each note starts at a random phase).
-- **Mute** removes an operator entirely; **solo** keeps only the soloed operators' outputs, but their modulators
-  keep working, so a soloed carrier sounds as it does in the mix.
+- Every strip has an **ON** button: on means the operator is in the signal path (not muted and reaching an output or
+  another operator), and switching on an operator that reaches nothing routes it to Dry so it sounds at once; off
+  mutes it. A readout under it says where the operator goes (›DRY, ›F1, PM›2, FB …). **Mute** removes an operator
+  entirely; **solo** keeps only the soloed operators' outputs, but their modulators keep working, so a soloed
+  carrier sounds as it does in the mix.
 - A quick **AMP ENV** (attack, decay, sustain, release) per operator edits the four points of its amplitude
   envelope; the label opens the full editor. **ENV AMOUNT** sets how far the pitch envelope (±48 semitones) and the
   modulation-index envelope reach.
@@ -117,14 +120,21 @@ The plan, the milestones and the measured results are in [docs/PLAN.md](docs/PLA
 - Hover any control for a tooltip with its name and value.
 
 **Presets**
-- **220 factory presets in 12 categories**, level-matched: Pianos & Keys (11), Orchestral & Acoustic (29: strings,
-  winds, brass, guitars, mallets, organ, choir), Dubstep Bass (51: wobbles at every division and LFO shape, growls
-  and talking formant basses, reese, neuro, screech, tearout, riddim, hoover), Bass (20: subs, 808s, acid, Moog-style,
-  house, garage, DnB, techno, funk), Leads (24), Pads & Textures (20), Plucks & Arps (15), Synth Keys & Organs (11),
-  Chords & Stabs (10), Drums & Percussion (14: kicks, snares, clap, hats, toms, cowbell, cymbal), FX & Risers (14:
-  tempo-synced risers and downlifters, impacts, sub drop, lasers, sirens, glitches). Every preset's loudest moment
-  sits at −18 dBFS (RMS) with the master up, so switching presets does not jump in level; the TRIM knob is that
-  per-preset gain.
+- **1044 factory presets in 12 categories**, every one built on an **8-operator architecture** that uses the matrix
+  (stacks, shared modulators, cross-modulation, feedback, ring cells, carriers split across the three filters and
+  Dry): Pianos & Keys (30), Orchestral & Acoustic (93: strings in legato / staccato / tremolo / pizzicato, winds solo
+  and ensemble, brass solo / muted / section, guitars, mallets, organs, accordions, choirs), Dubstep Bass (327: a
+  wobble for every division × LFO shape × filter type, clean and dirty; talking growls on five vowels × six
+  divisions; reese, neuro, screech, yoy, trip-gate, sub + wob and laser basses per division; tearout, brostep,
+  riddim, hoover, drop siren), Bass (51), Leads (120: 30 leads in base, Wide, Dirty and Octave Down), Pads &
+  Textures (101: 25 pads in base, Slow, Bright and Dark), Plucks & Arps (80), Synth Keys & Organs (40: eight
+  drawbar organs with fast and slow Leslie, e-pianos, clavs, bells), Chords & Stabs (60), Drums & Percussion (78:
+  kicks at four tunings × four styles, snares, claps, hats, toms, cymbals, cowbells, congas, bongos, shakers, zaps),
+  FX & Risers (63: risers and downlifters at 1, 2, 4 and 8 bars in four flavours, impacts, sub drops, lasers,
+  sirens, alarms, glitches, thunder, wind, rain). Every preset's loudest moment sits at −18 dBFS (RMS) with the
+  master up, so switching presets does not jump in level; the TRIM knob is that per-preset gain.
+- The PRESETS page has a **search box** that looks through every category, counts on the category tabs, and a
+  scrolling grid.
 - **A / B compare** in the header: flip between two sounds, COPY the current one into the other slot.
 - A category browser (PRESETS page), ‹ › arrows, INIT, SAVE (replaces the current user preset), SAVE AS, LOAD,
   FOLDER; `*` after the name when you've changed something.
@@ -143,7 +153,7 @@ vst\package.ps1    dist\Eight-Ball-<version>-Windows-x64.zip (Standalone + VST3 
 
 - Loads as an instrument with stereo out and MIDI in. All 492 parameters can be automated, and a knob drag records
   as one automation move. MIDI events are applied at the exact sample they arrive.
-- The 220 factory presets also appear in the DAW's program menu.
+- The 1044 factory presets also appear in the DAW's program menu.
 - The UI is HTML/SVG shown through WebView2 and scaled to the window size.
 - Requirements: Windows, Visual Studio 2022 or later (C++ workload), Git. JUCE 8.0.17 is reused from a sibling
   project's download or fetched on the first build. Release builds link the MSVC runtime statically; users need

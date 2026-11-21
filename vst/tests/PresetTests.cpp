@@ -82,7 +82,7 @@ static void presetTests()
     std::printf ("categories: %s\n", cats.joinIntoString (", ").toRawUTF8());
     CHECK (pm.findFactory ("Init") >= 0);
     // "modDst" names a slot's destination by parameter id
-    if (const int w = pm.findFactory ("Wob 1/4 Classic"); w >= 0)
+    if (const int w = pm.findFactory ("Wob 1/4 Sine LP"); w >= 0)
     {
         const int sel = (int) f[(size_t) w].values[modParam (0, mDst)];
         CHECK (sel > 0 && modDestParams()[(size_t) sel] == fltParam (0, gCutoff));

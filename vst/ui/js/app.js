@@ -212,30 +212,40 @@
 
   const tabsEl = $('#cat-tabs');
   const gridEl = $('#preset-grid');
+  const searchEl = $('#preset-search');
+  searchEl.addEventListener('input', renderBrowser);
+  searchEl.addEventListener('keydown', (e) => { e.stopPropagation(); if (e.key === 'Escape') { searchEl.value = ''; renderBrowser(); searchEl.blur(); } });
+  searchEl.addEventListener('keyup', (e) => e.stopPropagation());
   function renderBrowser() {
     const cats = categories();
+    const q = searchEl.value.trim().toLowerCase();
     tabsEl.innerHTML = '';
     for (const c of cats) {
-      const t = el('button', 'cat-tab', esc(c));
+      const n = presetList.filter(p => p.category === c).length;
+      const t = el('button', 'cat-tab', `${esc(c)}<span class="cat-count">${n}</span>`);
       t.type = 'button';
       t.setAttribute('role', 'tab');
-      t.setAttribute('aria-selected', c === activeCat);
-      t.classList.toggle('active', c === activeCat);
+      t.setAttribute('aria-selected', c === activeCat && !q);
+      t.classList.toggle('active', c === activeCat && !q);
       t.classList.toggle('has-current', c === current.category);
-      t.addEventListener('click', () => { activeCat = c; renderBrowser(); });
+      t.addEventListener('click', () => { activeCat = c; searchEl.value = ''; renderBrowser(); });
       tabsEl.appendChild(t);
     }
     gridEl.innerHTML = '';
-    const items = presetList.filter(p => p.category === activeCat);
-    if (!items.length) {
+    // a search looks through every category
+    const items = q ? presetList.filter(p => p.name.toLowerCase().includes(q) || p.category.toLowerCase().includes(q))
+                    : presetList.filter(p => p.category === activeCat);
+    $('#preset-count').textContent = q ? `${items.length} of ${presetList.length} match` : `${presetList.length} presets`;
+    if (!items.length && q) gridEl.appendChild(el('div', 'grid-empty', `Nothing matches "${esc(q)}".`));
+    else if (!items.length) {
       gridEl.appendChild(el('div', 'grid-empty',
         `No user presets yet. Click <b>SAVE AS</b> to store the current sound.<br>
          Preset files in <span class="path">${esc(presetFolder)}</span> show up here automatically.`));
     }
     for (const p of items) {
-      const b = el('button', 'preset-btn', `<span class="pb-name">${esc(p.name)}</span>`);
+      const b = el('button', 'preset-btn', `<span class="pb-name">${esc(p.name)}</span>${q ? `<span class="pb-cat">${esc(p.category)}</span>` : ''}`);
       b.type = 'button';
-      b.title = p.name;
+      b.title = `${p.category} · ${p.name}`;
       b.classList.toggle('selected', p.id === current.id);
       b.addEventListener('click', () => loadPreset(p));
       if (!p.factory) {
@@ -381,12 +391,20 @@
     const strip = el('div', 'op-strip');
     strip.dataset.op = k;
     const idc = el('div', 'op-id', `<span class="op-num">OP ${k + 1}</span>`);
+    // ON: the operator is in the signal path (not muted, and routed to an output or modulating one).
+    // Off = muted. Turning on an operator that reaches nothing also sends it to Dry, so it sounds right away.
+    const onBtn = new ToggleButton({ name: `Op ${k + 1} On` }, 0, (v) => opPower(k, v >= 0.5), 'ON');
+    onBtn.el.classList.add('op-on');
+    onBtn.el.dataset.tip = `Op ${k + 1} on / off (off = mute; on routes it to the output if nothing uses it yet)`;
     const mute = control(ToggleButton, opParamId(k, 'Mute'), 'M');
     const solo = control(ToggleButton, opParamId(k, 'Solo'), 'S');
     mute.el.classList.add('op-mute'); solo.el.classList.add('op-solo');
     const ms = el('div', 'op-ms');
-    ms.append(mute.el, solo.el);
+    ms.append(onBtn.el, mute.el, solo.el);
     idc.appendChild(ms);
+    const route = el('div', 'op-route');
+    route.dataset.tip = 'Where this operator goes (set on the MATRIX page)';
+    idc.appendChild(route);
     const act = el('div', 'op-activity', '<div class="op-act-fill"></div>');
     idc.appendChild(act);
     strip.appendChild(idc);
@@ -431,7 +449,7 @@
     row.appendChild(g5);
     strip.appendChild(row);
     opsPage.appendChild(strip);
-    opUi.push({ k, strip, scr, hz, keyTrack: knobs[opParamId(k, 'KeyTrack')], adsr, g4, act: act.firstChild });
+    opUi.push({ k, strip, scr, hz, keyTrack: knobs[opParamId(k, 'KeyTrack')], adsr, g4, act: act.firstChild, onBtn, route });
   }
 
   function sendAdsr(k) {
@@ -470,10 +488,36 @@
     }
   }
 
+  // what an operator feeds: output buses and the operators it modulates
+  function opRoutes(k) {
+    const outs = [], mods = [];
+    for (let j = 0; j < NUM_OUTPUTS; j++) if (values[outId(k, j)] > 0) outs.push(OUT_BUSES[j].toUpperCase());
+    for (let d = 0; d < NUM_OPS; d++) {
+      if (values[pmId(k, d)] > 0) mods.push(d === k ? 'FB' : `PM›${d + 1}`);
+      if (values[rmId(k, d)] > 0) mods.push(d === k ? 'RMself' : `RM›${d + 1}`);
+    }
+    return { outs, mods };
+  }
+  function opPower(k, on) {
+    const r = opRoutes(k);
+    const o = {};
+    o[opParamId(k, 'Mute')] = on ? 0 : 1;
+    if (on && !r.outs.length && !r.mods.length) o[outId(k, 3)] = 1;   // nothing uses it: send it to Dry
+    setParams(o);
+    logMidi(on ? `Op ${k + 1} on${!r.outs.length && !r.mods.length ? ' (routed to Dry)' : ''}` : `Op ${k + 1} off (muted)`);
+  }
+
   function refreshOps(ids) {
+    const routeIds = ids && [...ids].some(id => /^(pm|rm|out)\d/.test(id));
     for (const u of opUi) {
       const k = u.k, g = `op${k + 1}`;
-      if (ids && ![...ids].some(id => id.startsWith(g))) continue;
+      if (ids && !routeIds && ![...ids].some(id => id.startsWith(g))) continue;
+      const r = opRoutes(k);
+      const mutedNow = values[opParamId(k, 'Mute')] >= 0.5;
+      const reaches = r.outs.length > 0 || r.mods.length > 0;
+      u.onBtn.setValue(!mutedNow && reaches ? 1 : 0);
+      u.route.textContent = mutedNow ? 'muted' : reaches ? [...r.outs.map(b => '›' + b), ...r.mods].join(' ') : 'not routed';
+      u.strip.classList.toggle('idle', !reaches && !mutedNow);
       const wave = values[opParamId(k, 'Wave')] | 0;
       const fixed = values[opParamId(k, 'Fixed')] >= 0.5;
       const muted = values[opParamId(k, 'Mute')] >= 0.5;
@@ -585,7 +629,7 @@
   const pageTabs = Array.from(document.querySelectorAll('.page-tab'));
   const pageEls = Array.from(document.querySelectorAll('.page'));
   const PAGE_HINTS = {
-    ops: 'Drag knobs · Shift or Ctrl = fine · double-click = default · right-click = MIDI learn · click a wave to edit it',
+    ops: 'ON puts an operator in the signal path · drag knobs · Shift or Ctrl = fine · double-click = default · click a wave to edit it',
     matrix: 'Row modulates column · diagonal = feedback · drag a cell · double-click = clear · ANIMATE shows the signal',
     filters: 'Three filters per voice · send operators to them on the MATRIX page · ENV opens the cutoff by up to 5 octaves',
     art: 'Drag points · drag a segment = curve · double-click = add / delete a point · right-click = sustain, loop · SYNC = beats',
@@ -703,7 +747,7 @@
     if (ops) for (const u of opUi) {
       const a = ops[u.k] || 0;
       u.act.style.height = `${clamp(a * 160, 0, 100)}%`;
-      u.strip.classList.toggle('idle', !((active >> u.k) & 1));
+      u.strip.classList.toggle('silent', !((active >> u.k) & 1));
     }
   });
 

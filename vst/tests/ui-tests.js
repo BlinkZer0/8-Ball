@@ -64,6 +64,16 @@
     const missing = PARAM_DEFS.filter(d => !/^fxOrder/.test(d.id) && !document.querySelector(`[data-param="${d.id}"]`)).map(d => d.id);
     check(missing.length === 0, `every parameter but the FX order has a control (missing: ${missing.join(', ') || 'none'})`);
     check($$('.op-strip').length === 8, '8 operator strips');
+    // op 3 reaches nothing: its strip is idle and ON is off; clicking ON unmutes it and routes it to Dry
+    check($$('.op-strip')[2].classList.contains('idle') && !$$('.op-strip')[2].querySelector('.op-on').classList.contains('on') && /not routed/.test($$('.op-strip')[2].querySelector('.op-route').textContent), 'an unrouted operator shows idle with ON off');
+    const nOn = sent.length;
+    $$('.op-strip')[2].querySelector('.op-on').click();
+    const spOn = sent.slice(nOn).find(s => s.ev === 'setParams');
+    check(spOn && spOn.data.values.out3Dry === 1 && spOn.data.values.op3Mute === 0, 'ON sends out3Dry = 1 and op3Mute = 0');
+    check(!$$('.op-strip')[2].classList.contains('idle') && $$('.op-strip')[2].querySelector('.op-on').classList.contains('on') && /DRY/.test($$('.op-strip')[2].querySelector('.op-route').textContent), 'the strip is live and shows its route');
+    $$('.op-strip')[2].querySelector('.op-on').click();
+    check(sent[sent.length - 1].ev === 'setParams' && sent[sent.length - 1].data.values.op3Mute === 1, 'ON again mutes it');
+    $$('.op-strip')[2].querySelector('.op-on').click();
     check($$('.mx-cell').length === 64 + 64 + 32, `matrix cells: ${$$('.mx-cell').length} (64 PM + 64 ring + 32 output)`);
     check($$('.mx-layout').length >= 10, `${$$('.mx-layout').length} algorithm layouts`);
 
@@ -131,6 +141,10 @@
     $$('.page-tab').find(t => t.dataset.page === 'presets').click();
     check($('.page[data-page="presets"]').classList.contains('active'), 'presets page shows');
     check($$('.cat-tab').length === 3 && $$('.preset-btn').length >= 1, `preset browser: ${$$('.cat-tab').length} categories`);
+    const srch = $('#preset-search');
+    srch.value = 'tine'; srch.dispatchEvent(new Event('input'));
+    check($$('.preset-btn').length === 1 && /Tine Piano/.test($$('.preset-btn')[0].textContent) && /1 of 3 match/.test($('#preset-count').textContent), 'search finds Tine Piano across categories');
+    srch.value = ''; srch.dispatchEvent(new Event('input'));
     $$('.page-tab').find(t => t.dataset.page === 'ops').click();
 
     // incoming params update knobs (not the one just dragged within 300 ms: op2Ratio is skipped)

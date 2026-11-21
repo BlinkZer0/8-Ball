@@ -180,10 +180,19 @@ Inherited: `ui/js/engine-juce.js` wraps `window.__JUCE__.backend` in a `JuceEngi
   defaults, values are clamped, master is never stored, missing model parts load at their defaults.
 - Factory presets are also host programs (`"<Category> - <Name>"`).
 
-**Eight Ball:** 64 presets in milestone 5 (8 categories x 8); milestones 1-2 ship Init plus 11 starters.
-Level-matched with `EightBallTests --loudness` in milestone 5. In the factory file a mod slot's destination can be
-named by parameter id (`"modDst": { "mod1Dst": "flt1Cutoff" }`) instead of its list index; `.ebpreset` files
-store the index like every other parameter.
+**Eight Ball:** the factory file is **generated** by `presets/make_presets.py` from recipes written against a
+small builder (`Preset.op / pm / fb / rm / out / flt / lfo / mod / dist …`); edit the recipes, never the JSON.
+1044 presets in 12 categories, every one an 8-operator architecture (the script refuses a preset with fewer than
+five operators in the signal path, three for drum hits and noise effects); variants are deep copies with a
+modifier, the dubstep library is a grid (division × LFO shape × filter type, vowel × division). In the factory
+file a mod slot's destination can be named by parameter id (`"modDst": { "mod1Dst": "flt1Cutoff" }`) instead of
+its list index; `.ebpreset` files store the index like every other parameter. **Level matching:**
+`EightBallTests --presets presets\factory_presets.json --loudness` measures the loudest 100 ms RMS of every
+preset (a chord, or one note for basses / mono / drums / FX) and `make_presets.py --match <that output>` sets
+`presetGain` so each sits at −18 dBFS, holding a trim back when it would push the peak past −1 dBFS; the trims
+live in `presets/trims.json`. **A/B compare** is host-side: `abToggle` stashes the current sound (parameters,
+model, preset name) and brings back the other slot, `abCopy` copies the current sound into it; the `preset` event
+carries `ab` and `abOther`. The PRESETS page searches all categories (`#preset-search`) and shows counts per tab.
 
 ## 8. Web build (milestone 6)
 

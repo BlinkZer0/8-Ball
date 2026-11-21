@@ -94,9 +94,12 @@
       <div class="page" data-page="fx"><div id="fx-page" class="fx-page"></div></div>
       <div class="page" data-page="presets">
         <section class="browser" aria-label="Presets">
-          <div class="cat-tabs" id="cat-tabs" role="tablist"></div>
+          <div class="browser-head">
+            <div class="cat-tabs" id="cat-tabs" role="tablist"></div>
+            <input id="preset-search" type="search" placeholder="search all presets…" spellcheck="false" autocomplete="off" data-tip="Type to search every category (Esc clears)">
+          </div>
           <div class="preset-grid" id="preset-grid"></div>
-          <div class="browser-foot"><span id="preset-folder-path" class="path"></span></div>
+          <div class="browser-foot"><span id="preset-count"></span><span id="preset-folder-path" class="path"></span></div>
         </section>
       </div>
     </div>
