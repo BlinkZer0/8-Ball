@@ -318,7 +318,7 @@ public:
             }
             fx.process (outL.data(), outR.data(), n, val, bpm);
 
-            const double target = val[master];
+            const double target = val[master] * dbToGain (val[presetGain]);   // the preset's level trim, then the master
             double g = masterGain;
             for (int i = 0; i < n; ++i)
             {

@@ -7,13 +7,13 @@
 // bridges it to the processor:
 //   UI -> C++ events : uiReady, setParam{id,value}, setParams{values:{id:value...}}, gesture{id,begin},
 //                      noteOn{note,vel}, noteOff{note}, panic, modWheel{value},
-//                      loadPreset{id}, savePreset{name,overwrite}, deletePreset{id}, initPreset,
+//                      loadPreset{id}, savePreset{name,overwrite}, deletePreset{id}, initPreset, abToggle, abCopy,
 //                      loadPresetFile, openPresetFolder, paramMenu{id,x,y},
 //                      midiLearn{id}, midiForget{id}, learnCancel,
 //                      setWave{op,wave}, setEnv{key,env}, setLfoShape{lfo,shape}, setAnimate{on}
 //   C++ -> UI events : params{id:value...}, notes{on[],off[]},
 //                      stats{voices,peak,sustain,modWheel,bpm,ops[8],active,lfo[4],gr}, scope{ops[8][128]}, config{...},
-//                      presetList{presets[],folder}, preset{id,name,category},
+//                      presetList{presets[],folder}, preset{id,name,category,ab,abOther},
 //                      saveResult{ok,exists,name,error}, message{text},
 //                      model{waves,envs,lfoShapes}, learn{armed,map{id:cc}}
 class EightBallEditor : public juce::AudioProcessorEditor, private juce::Timer

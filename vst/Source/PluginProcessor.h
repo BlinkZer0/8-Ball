@@ -50,6 +50,12 @@ public:
     eightball::PresetData snapshot() const;  // the current sound as a preset
     void applyPreset (const eightball::PresetData&);
 
+    // A/B compare: two sounds you can flip between. The other slot starts as a copy of the current sound.
+    void abToggle();                         // stash the current sound, bring back the other
+    void abCopy();                           // copy the current sound into the other slot
+    bool abIsB() const { return abSlotB; }
+    bool abHasOther() const { return abStashed; }
+
     eightball::PresetManager presetManager;
     eightball::ModelStore model;             // waves, envelopes, LFO shapes (message thread edits)
 
@@ -115,6 +121,9 @@ private:
 
     mutable juce::CriticalSection presetLock;
     PresetInfo presetInfo;
+    eightball::PresetData abOther;           // the sound in the slot not playing
+    PresetInfo abOtherInfo;
+    bool abSlotB = false, abStashed = false;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (EightBallProcessor)
 };

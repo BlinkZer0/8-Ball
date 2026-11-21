@@ -58,8 +58,9 @@ int runBench()
     return 0;
 }
 
-// Loudest 100 ms window (RMS) while a chord (or one note for bass / mono presets) is held
-// for 3 s at velocity 100, with master at 1 (the preset's own gain staging is what is measured).
+// Loudest 100 ms window (RMS) of a 3 s phrase at velocity 100 with the master at 1: a chord (C4 E4 G4) for
+// polyphonic sounds, one note for basses (C1), mono presets (C1), drums and FX (C3). The preset's own level
+// trim (presetGain) is included, so after level matching every line reads near the target.
 int runLoudness()
 {
     PresetManager pm;
@@ -71,17 +72,25 @@ int runLoudness()
         applyPresetData (p.v, f[pi]);
         p.model = f[pi].model;
         p.v[master] = 1.0f;
-        const bool single = f[pi].category.containsIgnoreCase ("Bass") || p.v[voiceMode] >= 0.5f;
+        const auto& cat = f[pi].category;
+        const bool bass = cat.containsIgnoreCase ("Bass") || p.v[voiceMode] >= 0.5f;
+        const bool hit = cat.containsIgnoreCase ("Drum") || cat.containsIgnoreCase ("FX");
         std::vector<Event> ev;
-        if (single) ev.push_back (on (1, 36));
+        if (bass) ev.push_back (on (1, 36));
+        else if (hit) ev.push_back (on (1, 48));
         else { ev.push_back (on (1, 60)); ev.push_back (on (1, 64)); ev.push_back (on (1, 67)); }
-        auto r = render (p, (int) (kSr * 3 / kBlock), ev);
+        const int blocks = (int) (kSr * 3 / kBlock);
+        for (auto& e : std::vector<Event> (ev)) ev.push_back (off (blocks * 2 / 3, e.block == 1 ? (bass ? 36 : hit ? 48 : 60) : 60));
+        ev.resize (bass || hit ? 2 : 6);
+        if (! bass && ! hit) { ev[3] = off (blocks * 2 / 3, 60); ev[4] = off (blocks * 2 / 3, 64); ev[5] = off (blocks * 2 / 3, 67); }
+        auto r = render (p, blocks, ev);
         const auto m = r.mono();
         double best = 0;
-        for (size_t i = 0; i + 4800 <= m.size(); i += 2400) best = std::max (best, rms (m, i, i + 4800));
-        std::printf ("  { \"index\": %d, \"name\": \"%s\", \"category\": \"%s\", \"rms\": %.5f, \"dB\": %.2f, \"peak\": %.3f }%s\n",
+        for (size_t i = 0; i + 4800 <= m.size(); i += 1200) best = std::max (best, rms (m, i, i + 4800));
+        std::printf ("  { \"index\": %d, \"name\": \"%s\", \"category\": \"%s\", \"rms\": %.5f, \"dB\": %.2f, \"peak\": %.3f, \"trim\": %.2f }%s\n",
                      (int) pi, f[pi].name.toRawUTF8(), f[pi].category.toRawUTF8(), best, dB (best), r.peak,
-                     pi + 1 < f.size() ? "," : "");
+                     std::isnan (f[pi].values[presetGain]) ? 0.0 : f[pi].values[presetGain], pi + 1 < f.size() ? "," : "");
+        std::fflush (stdout);
     }
     std::printf ("]\n");
     return 0;

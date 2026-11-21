@@ -185,6 +185,8 @@ function buildParams() {
     d.push(ch(`${o}Dst`, `${n}Destination`, 'mod', dst, 0));
     d.push(fl(`${o}Amt`, `${n}Amount`, 'mod', -1, 1, 0, 'bip', { bipolar: true }));
   }
+  // ---- milestone 5 (after the mod slots: not a mod destination)
+  d.push(fl('presetGain', 'Preset Gain', 'global', -24, 12, 0, 'dB', { bipolar: true }));
   return d;
 }
 

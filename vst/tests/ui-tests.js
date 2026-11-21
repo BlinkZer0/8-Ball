@@ -138,6 +138,15 @@
     check(/25%/.test($('[data-param="op3Level"] .knob-value').textContent), 'host param change updates a knob');
     check(!/7/.test($('[data-param="op2Ratio"] .knob-value').textContent), 'a knob just edited here ignores the echo for 300 ms');
 
+    // A/B: B flips (abToggle), COPY sends abCopy, the preset event moves the highlight
+    const n20 = sent.length;
+    $('#ab-b').click(); $('#ab-copy').click(); $('#ab-a').click();
+    check(sent.slice(n20).filter(s => s.ev === 'abToggle').length === 1 && sent.slice(n20).some(s => s.ev === 'abCopy'), 'A/B buttons send abToggle once and abCopy');
+    (listeners.preset || []).forEach(f => f({ id: 'factory:0', name: 'Init', category: 'Init', ab: 'B', abOther: true }));
+    check($('#ab-b').classList.contains('on') && !$('#ab-a').classList.contains('on'), 'preset event with ab = B highlights B');
+    (listeners.preset || []).forEach(f => f({ id: 'factory:0', name: 'Init', category: 'Init', ab: 'A', abOther: true }));
+
+
     // ---- filters page
     $$('.page-tab').find(t => t.dataset.page === 'filters').click();
     check($$('.flt-panel').length === 3 && $$('.flt-panel .scr-line').every(p => p.getAttribute('d').length > 50), 'three filter panels draw a response curve');

@@ -70,6 +70,8 @@ enum ParamIndex
     //       before it", so appending parameters later appends destinations)
     mod1On,
     modLast = mod1On + kNumModSlots * kModFields - 1,
+    // ---- appended in milestone 5 (not a mod destination: after the slots) ----
+    presetGain,          // level trim in dB, after the FX, before the master (level-matched factory presets)
     kNumParams
 };
 
@@ -329,6 +331,8 @@ inline const std::vector<PDef>& paramTable()
             ch (o + "Dst", n + "Destination", dst, 0);
             fl (o + "Amt", n + "Amount", -1, 1, 0, Unit::BipolarPercent);
         }
+        // ---- milestone 5
+        fl ("presetGain", "Preset Gain", -24, 12, 0, Unit::Decibels);
         return d;
     }();
     return table;

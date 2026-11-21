@@ -58,10 +58,13 @@ PresetManager::PresetManager()
 //                       "presets": [ { "name": "...", "base": "<template>"?, "params": {...}, "waves"?, "envs"?, "lfoShapes"? } ] } ] }
 // A preset's values = parameter defaults <- template chain (base first) <- its own params;
 // model blocks merge the same way (only the parts given).
+juce::File PresetManager::factoryOverride;
+
 void PresetManager::loadFactory()
 {
-    const auto json = juce::JSON::parse (juce::String::fromUTF8 (BinaryData::factory_presets_json,
-                                                                 BinaryData::factory_presets_jsonSize));
+    const auto json = factoryOverride.existsAsFile()
+                        ? juce::JSON::parse (factoryOverride.loadFileAsString())
+                        : juce::JSON::parse (juce::String::fromUTF8 (BinaryData::factory_presets_json, BinaryData::factory_presets_jsonSize));
     const auto templates = json["templates"];
 
     std::function<void (const juce::String&, PresetData&, int)> applyTemplate;

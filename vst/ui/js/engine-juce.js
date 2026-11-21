@@ -57,6 +57,8 @@ class JuceEngine {
   // presets
   loadPreset(id) { this.emit('loadPreset', { id }); }
   initPreset() { this.emit('initPreset'); }
+  abToggle() { this.emit('abToggle'); }
+  abCopy() { this.emit('abCopy'); }
   savePreset(name, overwrite) { this.emit('savePreset', { name, overwrite: !!overwrite }); }
   deletePreset(id) { this.emit('deletePreset', { id }); }
   loadPresetFile() { this.emit('loadPresetFile'); }

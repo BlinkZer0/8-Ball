@@ -1,10 +1,8 @@
 # Eight Ball: build plan
 
-Status (2026-11-20): **milestone 4 built**: on top of milestones 1-3 (the DSP core, the 8 operators, the PM /
-ring / output matrix, the filters, the envelope editor, LFOs, mod matrix, the FX chain, the plugin), the operator
-wave editor (64 partials with phases, or a drawn cycle) and the animated matrix (glowing cells, the signal-flow
-diagram, eight live scopes, an ANIMATE toggle), 13 starter presets. All automated checks pass; waiting for
-hand-testing in Minihost Modular.
+Status (2026-11-20): **milestone 5 built**: the full synth from milestones 1-4 plus 220 level-matched factory
+presets generated from recipes (`presets/make_presets.py`), a per-preset level trim parameter, A/B compare. All
+automated checks pass; waiting for hand-testing in Minihost Modular.
 
 The brief's milestones, each ending with a stop for hand-testing:
 
@@ -14,7 +12,7 @@ The brief's milestones, each ending with a stop for hand-testing:
 | 2 | Filters + articulators + LFOs | the FILTERS page, the multi-point envelope editor, 4 LFOs, the 16-slot mod matrix | **done** |
 | 3 | FX tab | Distortion, Chorus, Phaser, Delay, Reverb, EQ, Compressor / Limiter with drag-to-reorder | **done** |
 | 4 | Full UI + animated matrix | the harmonic editor and drawn shapes, glowing cells, per-operator scopes, signal-flow lines, Animate toggle | **done** |
-| 5 | Presets | 64 factory presets, level-matched, A/B compare | next |
+| 5 | Presets | 220 factory presets (the brief said 64; the user asked for 200: ~40 acoustic instruments, the rest electronic with a dubstep focus), level-matched, A/B compare | **done** |
 | 6 | HTML build | the DSP core compiled to WebAssembly, Web Audio + Web MIDI, the same UI and presets | |
 
 ## Milestone 1 notes
@@ -206,3 +204,34 @@ screen):
 - MATRIX: with ANIMATE on, play a chord on Two 4-op stacks: the cells, numbers, flow lines and scopes move;
   turn ANIMATE off: everything stops (and the plugin stops sending scopes). Load Harmonic Pad and watch the
   scopes of op 1 and 2.
+
+## Milestone 5 notes
+
+**The presets** are recipes in `vst/presets/make_presets.py`, a few lines each against a builder
+(`Preset.op(k, ratio, level, ...)`, `pm`, `fb`, `out` / `carriers`, `flt`, `lfo`, `mod`, `dist` … `comp`, `mono` /
+`legato`; envelope helpers `adsr`, `perc`, `pitch_drop`, `swell`, `env`). Families share a core (a `piano()`, a
+`wobble()` with division / LFO shape / filter / distortion arguments, `growl()` with two formant band-passes, a
+`lead()`, `pad()`, `pluck()`, `stab()`, `organ()`, a `drum()` and `fx()` wrapper) and every preset in a family sets
+its own character. The script asserts unique names and at least 200 presets and writes `factory_presets.json`
+(never edit the JSON). 220 presets, 12 categories: the user asked for about 30 acoustic instruments (there are 40:
+pianos, strings, winds, brass, guitars, mallets, organ, choir, accordion) and the rest electronic, heavy on dubstep.
+
+**Level matching:** a new parameter `presetGain` (dB, after the FX, before the master; the TRIM knob in the global
+strip) carries each preset's trim. `EightBallTests --presets <file> --loudness` measures every preset from a JSON
+file without rebuilding (loudest 100 ms RMS at master 1: a C4 E4 G4 chord at velocity 100, one C1 for basses and
+mono presets, one C3 for drums and FX; the note is released after 2 s so one-shots and releases count too), and
+`make_presets.py --match <that output>` moves every trim so the measurement lands at -18 dBFS, holding a trim back
+when it would put the peak above -1 dBFS (the compressor / limiter in a chain keeps the loop from converging
+exactly, so the match runs three times). Result: 219 of 219 trimmed presets within +-0.5 dB of -18 dBFS except
+Hi-Hat Closed (-19.7 dB, held back by the peak guard); trims range from -15.5 to +12 dB; no peak above 0.95. Trims are stored in `presets/trims.json` and re-applied on every generation.
+
+**A/B compare** (host side): `abToggle` snapshots the current sound (parameters, model, preset name), applies the
+other slot and keeps the snapshot as the new other slot; the first flip therefore gives two copies. `abCopy`
+overwrites the other slot. Not part of the project state. The header shows A / B and COPY.
+
+**What to try in Minihost Modular** (milestone 5):
+- Step through the categories with ‹ ›: levels should stay even (watch the meter). Dubstep Bass on C1-C2 with
+  the host playing (synced wobbles follow the tempo and lock to the beat); the mod wheel opens most of them.
+  Drums on C3; FX & Risers: Riser 2 Bars / 4 Bars with the transport running (they are in beats).
+- A/B: load Wob 1/4 Classic, press B (a copy), load Growl Talk 1/8, press A / B to compare, COPY to overwrite.
+- TRIM: the preset's own gain; it saves into user presets.

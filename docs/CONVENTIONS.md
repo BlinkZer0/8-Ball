@@ -90,17 +90,18 @@ Rules:
 
 - **Append-only.** New parameters go at the end of `ParamIndex`. Indices and string IDs never change.
 - **New parameters default to neutral**, so older presets and projects sound unchanged.
-- The **whole table is defined and frozen in milestone 1**: 491 parameters (global, 8 x 17 operator fields,
+- The **whole table is defined and frozen in milestone 1**: 491 parameters in milestone 1 (global, 8 x 17 operator fields,
   8 x 8 PM, 8 x 8 ring, 8 x 4 output column, 3 x 10 filter fields + routing, 4 x 8 LFO fields, FX, 7 FX slots,
-  16 x 4 mod slots). Parameters for later milestones exist but do nothing yet.
+  16 x 4 mod slots). Milestone 5 appended `presetGain` (492): the level trim the matching pass writes into every
+  factory preset, applied after the FX and before the master.
 - `dsp/ParamTable.h` and `ui/js/params.js` are mirrored by hand. `EightBallTests --dump-params` prints the C++
   table as JSON and `tests/check-params.ps1` fails on any difference (ids, names, kinds, ranges, defaults, steps,
   units, log, choices, noPreset).
 
 **Eight Ball:**
 - **The mod matrix's destination list is "every Float parameter before the mod slots, except master"**, generated
-  from the table in both C++ and JS. The mod slots are therefore the last block of the table, and any parameter
-  appended later becomes a new destination at the end of the list.
+  from the table in both C++ and JS. Parameters appended after the mod slots (such as `presetGain`) are not
+  destinations.
 - **State that is not a host parameter** lives in the **Model** and travels in presets and project state as named
   JSON blocks (`waves`, `envs`, `lfoShapes`): the harmonic editor's partials or drawn cycle per operator, the
   multi-point envelopes (3 per operator, 2 per filter), the drawn LFO shapes. The MIDI-learn map is project state

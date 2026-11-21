@@ -63,6 +63,10 @@ public:
     // Brings a preset object written by an older version up to kPresetVersion (in place).
     static void migrate (juce::var& json);
 
+    // Tools only (EightBallTests --presets <file>): read the factory presets from this file instead of
+    // the compiled-in copy, so presets can be measured and tuned without rebuilding.
+    static juce::File factoryOverride;
+
 private:
     void loadFactory();
 

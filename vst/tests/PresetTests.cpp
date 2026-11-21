@@ -6,6 +6,7 @@
 //   EightBallTests.exe --loudness      loudness of every factory preset (level matching)
 //   EightBallTests.exe --render "<Category/Name>" out.wav [seconds] [note]
 //   EightBallTests.exe --host-check "<path to Eight Ball.vst3>"
+//   EightBallTests.exe --presets <factory.json> <any of the above>   use that factory file instead of the built-in one
 #include "TestRender.h"
 
 using namespace eightball;
@@ -81,13 +82,23 @@ static void presetTests()
     std::printf ("categories: %s\n", cats.joinIntoString (", ").toRawUTF8());
     CHECK (pm.findFactory ("Init") >= 0);
     // "modDst" names a slot's destination by parameter id
-    if (const int w = pm.findFactory ("Wobble Bass"); w >= 0)
+    if (const int w = pm.findFactory ("Wob 1/4 Classic"); w >= 0)
     {
         const int sel = (int) f[(size_t) w].values[modParam (0, mDst)];
         CHECK (sel > 0 && modDestParams()[(size_t) sel] == fltParam (0, gCutoff));
         CHECK (f[(size_t) w].values[modParam (0, mSrc)] == (float) srcLfo1);
     }
     else CHECK (false);
+    // the generated file: at least 200 presets, every one level-trimmed (presetGain set), unique names
+    CHECK (f.size() >= 200);
+    {
+        juce::StringArray names;
+        int trimmed = 0;
+        for (const auto& p : f) { names.add (p.name); if (! std::isnan (p.values[presetGain])) ++trimmed; }
+        CHECK (trimmed >= (int) f.size() - 1);   // all but Init
+        names.removeDuplicates (false);
+        CHECK ((int) names.size() == (int) f.size());
+    }
 
     // save -> load round trip, with model blocks
     const auto tmp = juce::File::getSpecialLocation (juce::File::tempDirectory).getChildFile ("eightball-test.ebpreset");
@@ -155,6 +166,14 @@ static void presetTests()
 int main (int argc, char* argv[])
 {
     juce::ScopedJuceInitialiser_GUI init;
+
+    // --presets <file>: use this factory file instead of the compiled-in one (tuning without a rebuild)
+    if (argc >= 3 && juce::String (argv[1]) == "--presets")
+    {
+        PresetManager::factoryOverride = juce::File::getCurrentWorkingDirectory().getChildFile (juce::String (argv[2]));
+        if (! PresetManager::factoryOverride.existsAsFile()) { std::printf ("no such file: %s\n", argv[2]); return 2; }
+        argc -= 2; argv += 2;
+    }
 
     if (argc >= 2 && juce::String (argv[1]) == "--dump-params")
     {

@@ -268,6 +268,30 @@ PresetData EightBallProcessor::snapshot() const
     return data;
 }
 
+void EightBallProcessor::abToggle()
+{
+    const PresetData now = snapshot();
+    const PresetInfo nowInfo = currentPreset();
+    if (abStashed)
+    {
+        applyPreset (abOther);
+        setPresetInfo (abOtherInfo.id, abOtherInfo.name, abOtherInfo.category);
+    }
+    abOther = now;
+    abOtherInfo = nowInfo;
+    abStashed = true;
+    abSlotB = ! abSlotB;
+    ++presetVersion;
+}
+
+void EightBallProcessor::abCopy()
+{
+    abOther = snapshot();
+    abOtherInfo = currentPreset();
+    abStashed = true;
+    ++presetVersion;
+}
+
 void EightBallProcessor::setPresetInfo (const juce::String& id, const juce::String& name, const juce::String& category)
 {
     {

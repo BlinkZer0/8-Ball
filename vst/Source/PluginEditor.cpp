@@ -104,6 +104,8 @@ juce::WebBrowserComponent::Options EightBallEditor::makeBrowserOptions()
             sendPreset();
         })
         .withEventListener ("initPreset", [this] (const juce::var&) { processor.initPreset(); sendPreset(); })
+        .withEventListener ("abToggle", [this] (const juce::var&) { processor.abToggle(); sendPreset(); })
+        .withEventListener ("abCopy", [this] (const juce::var&) { processor.abCopy(); sendPreset(); })
         .withEventListener ("savePreset", [this] (const juce::var& e)
         {
             const auto name = e["name"].toString().trim();
@@ -280,7 +282,8 @@ void EightBallEditor::sendPreset()
     const auto info = processor.currentPreset();
     lastPresetVersion = processor.presetVersion.load();
     browser.emitEventIfBrowserIsVisible ("preset", makeObject ({
-        { "id", info.id }, { "name", info.name }, { "category", info.category } }));
+        { "id", info.id }, { "name", info.name }, { "category", info.category },
+        { "ab", processor.abIsB() ? "B" : "A" }, { "abOther", processor.abHasOther() } }));
 }
 
 std::optional<juce::WebBrowserComponent::Resource> EightBallEditor::getResource (const juce::String& url)

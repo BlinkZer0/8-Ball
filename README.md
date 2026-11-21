@@ -1,4 +1,4 @@
-# Eight Ball: v0.4 (milestone 4 of 6)
+# Eight Ball: v0.5 (milestone 5 of 6)
 
 Eight Ball is an 8-operator FM synthesizer: harmonic-editor wavetable operators, an 8×8 phase-modulation grid
 plus an 8×8 ring-modulation grid, three multimode filters, freeform envelopes, four LFOs, a mod matrix, an FX
@@ -9,7 +9,7 @@ same way.
 
 | Build | Where | Status |
 |---|---|---|
-| **VST3 plugin** + Standalone | [`vst/`](vst/README.md) | milestone 4: the DSP core, the 8 operators with the harmonic / drawn wave editor, the animated matrix, the three filters, the envelope editor, 4 LFOs, the 16-slot mod matrix, the 7-unit FX chain, the plugin, the full UI, 13 starter presets; all automated checks pass |
+| **VST3 plugin** + Standalone | [`vst/`](vst/README.md) | milestone 5: the full synth (8 operators with the wave editor, the matrix, filters, envelopes, LFOs, mod matrix, FX chain, animated matrix), 220 level-matched factory presets, A/B compare; all automated checks pass |
 | **Web build** | `web/index.html` | milestone 6 |
 
 The plan, the milestones and the measured results are in [docs/PLAN.md](docs/PLAN.md). The house rules are in
@@ -31,7 +31,7 @@ The plan, the milestones and the measured results are in [docs/PLAN.md](docs/PLA
 
 (made by `vst\tests\run-ui-tests.ps1` from the real UI with a stand-in bridge)
 
-## What it does so far (milestones 1 to 4)
+## What it does so far (milestones 1 to 5)
 
 **The 8 operators**
 - Each operator plays a **band-limited, mipmapped wavetable** baked from a set of partials (level and phase each)
@@ -116,10 +116,15 @@ The plan, the milestones and the measured results are in [docs/PLAN.md](docs/PLA
 - Hover any control for a tooltip with its name and value.
 
 **Presets**
-- 13 starter presets (Init plus one or two per category: E-Pianos & Bells, Basses, Leads, Pads, Brass & Plucks,
-  Organs & Keys, Evolving & Textures, FX & Percussion; Wobble Bass and Vibrato Lead use the LFOs and the mod
-  matrix, Soft FM Pad and Pluck use the FX, Harmonic Pad uses custom harmonic waves). The 64 level-matched factory
-  presets come in milestone 5.
+- **220 factory presets in 12 categories**, level-matched: Pianos & Keys (11), Orchestral & Acoustic (29: strings,
+  winds, brass, guitars, mallets, organ, choir), Dubstep Bass (51: wobbles at every division and LFO shape, growls
+  and talking formant basses, reese, neuro, screech, tearout, riddim, hoover), Bass (20: subs, 808s, acid, Moog-style,
+  house, garage, DnB, techno, funk), Leads (24), Pads & Textures (20), Plucks & Arps (15), Synth Keys & Organs (11),
+  Chords & Stabs (10), Drums & Percussion (14: kicks, snares, clap, hats, toms, cowbell, cymbal), FX & Risers (14:
+  tempo-synced risers and downlifters, impacts, sub drop, lasers, sirens, glitches). Every preset's loudest moment
+  sits at −18 dBFS (RMS) with the master up, so switching presets does not jump in level; the TRIM knob is that
+  per-preset gain.
+- **A / B compare** in the header: flip between two sounds, COPY the current one into the other slot.
 - A category browser (PRESETS page), ‹ › arrows, INIT, SAVE (replaces the current user preset), SAVE AS, LOAD,
   FOLDER; `*` after the name when you've changed something.
 - `.ebpreset` files (plain JSON: every parameter plus the waves, envelopes and LFO shapes) in
@@ -135,9 +140,9 @@ vst\install.bat    copy "Eight Ball.vst3" to C:\Program Files\Common Files\VST3
 vst\package.ps1    dist\Eight-Ball-<version>-Windows-x64.zip (Standalone + VST3 + install notes)
 ```
 
-- Loads as an instrument with stereo out and MIDI in. All 491 parameters can be automated, and a knob drag records
+- Loads as an instrument with stereo out and MIDI in. All 492 parameters can be automated, and a knob drag records
   as one automation move. MIDI events are applied at the exact sample they arrive.
-- The factory presets also appear in the DAW's program menu.
+- The 220 factory presets also appear in the DAW's program menu.
 - The UI is HTML/SVG shown through WebView2 and scaled to the window size.
 - Requirements: Windows, Visual Studio 2022 or later (C++ workload), Git. JUCE 8.0.17 is reused from a sibling
   project's download or fetched on the first build. Release builds link the MSVC runtime statically; users need
@@ -165,8 +170,8 @@ envelopes, operators, matrix, filters, voices, quality: bypass switches, clicks,
 oversampling; LFOs + mod matrix: rate, sync, delay, every shape, bypass of the LFO switch / slot switch / amount /
 depth, per-voice sources, global destinations, clicks; the FX chain: every unit's bypass and mix 0 bit-identical,
 what each unit does, delay timing and sync, reverb tail and decay, EQ bands, compression and the limiter ceiling,
-the order, click-free switching; every factory preset through a full note), `check-params.ps1` (491 parameters
-match between C++ and JS), `run-ui-tests.ps1` (67 UI checks per page, including the wave editor and the matrix
+the order, click-free switching; every factory preset through a full note), `check-params.ps1` (492 parameters
+match between C++ and JS), `run-ui-tests.ps1` (69 UI checks per page, including the wave editor, A/B and the matrix
 animation), `--host-check` (the built VST3 loaded like a DAW: parameters, sound, automation, state round trip).
 
 **Still to confirm by hand:** everything in Minihost Modular and FL Studio: sound, the UI, MIDI learn, the

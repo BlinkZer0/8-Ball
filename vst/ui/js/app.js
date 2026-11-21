@@ -164,13 +164,21 @@
   });
 
   engine.on('preset', (p) => {
-    const changed = p.id !== current.id || p.name !== current.name;
+    const changed = p.id !== current.id || p.name !== current.name || p.ab !== current.ab;
     current = p;
     if (changed) presetDirty = false;
     if (p.category && categories().includes(p.category)) activeCat = p.category;
     renderPresetName();
     renderBrowser();
+    $('#ab-a').classList.toggle('on', p.ab !== 'B');
+    $('#ab-b').classList.toggle('on', p.ab === 'B');
+    $('#ab-copy').classList.toggle('has', !!p.abOther);
   });
+  // A/B: clicking the letter that isn't playing flips; COPY puts this sound in the other slot
+  const abFlip = () => { for (const id in lastLocal) delete lastLocal[id]; engine.abToggle(); logMidi(`A/B: switched to ${current.ab === 'B' ? 'A' : 'B'}`); };
+  $('#ab-a').addEventListener('click', () => { if (current.ab === 'B') abFlip(); });
+  $('#ab-b').addEventListener('click', () => { if (current.ab !== 'B') abFlip(); });
+  $('#ab-copy').addEventListener('click', () => { engine.abCopy(); logMidi(`A/B: copied ${current.ab || 'A'} to ${current.ab === 'B' ? 'A' : 'B'}`); });
 
   engine.on('message', ({ text }) => logMidi(text));
 
@@ -564,6 +572,7 @@
     addKnob(row, 'poly', { size: 'md', label: 'VOICES' });
     addKnob(row, 'portaTime', { size: 'md', label: 'PORTA' });
     addKnob(row, 'bendRange', { size: 'md', label: 'BEND' });
+    addKnob(row, 'presetGain', { size: 'md', label: 'TRIM' });
     const sw = $('#global-switches');
     sw.appendChild(control(Segmented, 'voiceMode', ['POLY', 'MONO', 'LEG']).el);
     const r2 = el('div', 'switch-row');
