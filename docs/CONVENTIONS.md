@@ -146,8 +146,10 @@ Inherited: `ui/js/engine-juce.js` wraps `window.__JUCE__.backend` in a `JuceEngi
 - CSS custom properties on `:root`.
 
 **Eight Ball:**
-- Same widget family and dark chassis as E-Piano, new identity: **gunmetal panels, felt green-cyan accent
-  (`--accent: #35d6b4`), an eight ball as the logo**, inverted keys (black naturals, white sharps). The console is
+- Same widget family as E-Piano, new identity: **maroon chassis and panels, a teal accent (`--accent: #2fc5c7`)
+  for everything interactive, gold (`--gold: #d9a441`) for titles, readouts, knob pointers and rims, and an eight
+  ball as the logo** (the same `<symbol>` in the header and in the status-bar corner; `icon/make-icon.ps1` draws
+  the app icon the Standalone and the VST3 carry). Inverted keys (black naturals, ivory sharps). The console is
   laid out at 1260 px wide; the plugin window (1180 x 900) scales it.
 - `Tooltip` (one floating element for every `[data-param]` / `[data-tip]`: name + value) and `ContextMenu`
   (the right-click menu) live in `controls.js`.

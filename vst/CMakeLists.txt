@@ -44,6 +44,8 @@ juce_add_plugin(EightBallVST
     EDITOR_WANTS_KEYBOARD_FOCUS TRUE
     VST3_CATEGORIES         Instrument Synth
     NEEDS_WEBVIEW2          TRUE
+    ICON_BIG                "${CMAKE_CURRENT_SOURCE_DIR}/icon/eight-ball-256.png"
+    ICON_SMALL              "${CMAKE_CURRENT_SOURCE_DIR}/icon/eight-ball-32.png"
     COPY_PLUGIN_AFTER_BUILD FALSE)
 
 # The UI (HTML/CSS/JS/SVG) and the factory presets are compiled into the binary.

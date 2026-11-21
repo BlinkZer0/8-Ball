@@ -11,27 +11,29 @@
   <svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
     <defs>
       <radialGradient id="knobFace" cx="38%" cy="30%" r="80%">
-        <stop offset="0%" stop-color="#3a3f47"/>
-        <stop offset="60%" stop-color="#1c1f24"/>
-        <stop offset="100%" stop-color="#0f1114"/>
+        <stop offset="0%" stop-color="#5a2430"/>
+        <stop offset="60%" stop-color="#2a0b10"/>
+        <stop offset="100%" stop-color="#170507"/>
       </radialGradient>
       <radialGradient id="ballFace" cx="35%" cy="30%" r="75%">
-        <stop offset="0%" stop-color="#4a4f58"/>
+        <stop offset="0%" stop-color="#5a5f68"/>
         <stop offset="45%" stop-color="#16181c"/>
         <stop offset="100%" stop-color="#050607"/>
       </radialGradient>
+      <!-- the eight ball, drawn once -->
+      <symbol id="eightBall" viewBox="0 0 40 40">
+        <circle cx="20" cy="20" r="19" fill="url(#ballFace)" stroke="#d9a441" stroke-width="1.2"/>
+        <circle cx="20" cy="20" r="9.5" fill="#f3ead8"/>
+        <text x="20" y="24.6" class="ball-eight">8</text>
+        <ellipse cx="13" cy="11" rx="4.5" ry="2.6" fill="#fff" opacity="0.2" transform="rotate(-30 13 11)"/>
+      </symbol>
     </defs>
   </svg>
 
   <main class="synth">
     <header class="topbar">
       <div class="brand">
-        <svg class="brand-logo" viewBox="0 0 40 40" aria-hidden="true">
-          <circle cx="20" cy="20" r="19" fill="url(#ballFace)" stroke="#000"/>
-          <circle cx="20" cy="20" r="9.5" fill="#f2f1ee"/>
-          <text x="20" y="24.6" class="ball-eight">8</text>
-          <ellipse cx="13" cy="11" rx="4" ry="2.4" fill="#fff" opacity="0.18" transform="rotate(-30 13 11)"/>
-        </svg>
+        <svg class="brand-logo" viewBox="0 0 40 40" aria-hidden="true"><use href="#eightBall"/></svg>
         <div class="brand-text">
           <span class="brand-mark">EIGHT BALL</span>
           <span class="brand-sub">8-OP FM · v0.5</span>
@@ -125,6 +127,7 @@
     <footer class="statusbar">
       <span id="midi-monitor" class="monitor">Connecting to plugin…</span>
       <span class="audio-status"><span class="led" id="audio-led"></span><span id="audio-info">—</span></span>
+      <svg class="corner-ball" viewBox="0 0 40 40" aria-hidden="true"><use href="#eightBall"/></svg>
     </footer>
   </main>
 

@@ -154,7 +154,8 @@ vst\package.ps1    dist\Eight-Ball-<version>-Windows-x64.zip (Standalone + VST3 
 - Loads as an instrument with stereo out and MIDI in. All 492 parameters can be automated, and a knob drag records
   as one automation move. MIDI events are applied at the exact sample they arrive.
 - The 1044 factory presets also appear in the DAW's program menu.
-- The UI is HTML/SVG shown through WebView2 and scaled to the window size.
+- The UI is HTML/SVG shown through WebView2 and scaled to the window size: maroon chassis, teal controls, gold
+  details, an eight ball in the corner (and as the app icon).
 - Requirements: Windows, Visual Studio 2022 or later (C++ workload), Git. JUCE 8.0.17 is reused from a sibling
   project's download or fetched on the first build. Release builds link the MSVC runtime statically; users need
   only the WebView2 runtime (built into Windows 11 and current Windows 10).
