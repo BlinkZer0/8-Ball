@@ -641,9 +641,9 @@ body.web .web-only { display: flex !important; }
 .path { font-family: var(--mono); color: var(--text); font-size: 11px; word-break: break-all; }
 .browser-foot { font-family: var(--mono); font-size: 10px; color: var(--faint); display: flex; gap: 16px; }
 .pb-cat { margin-left: auto; font-size: 9px; color: var(--faint); white-space: nowrap; padding-left: 8px; }
-.preset-grid::-webkit-scrollbar { width: 12px; }
-.preset-grid::-webkit-scrollbar-track { background: #0f1113; border-radius: 6px; }
-.preset-grid::-webkit-scrollbar-thumb { background: #2f3a37; border: 2px solid #0f1113; border-radius: 6px; min-height: 40px; }
+.preset-grid::-webkit-scrollbar { width: 14px; }
+.preset-grid::-webkit-scrollbar-track { background: #1a1e23; border-radius: 7px; border: 1px solid #262a31; }
+.preset-grid::-webkit-scrollbar-thumb { background: var(--accent-dim); border: 2px solid #1a1e23; border-radius: 7px; min-height: 48px; }
 .preset-grid::-webkit-scrollbar-thumb:hover { background: var(--accent-dim); }
 
 /* ================================================================ modal === */
