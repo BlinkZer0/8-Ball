@@ -203,6 +203,25 @@ AudioWorklet; `web-host.js` provides `window.__JUCE__.backend` on top of Web Aud
 assembles `web/index.html` from `ui/` the same way E-Piano does. There is no JavaScript twin of the engine and no
 parity test: the browser runs the same compiled code as the plugin.
 
+- `webhost/wasm-engine.cpp`: a flat `extern "C"` API, every export tagged `EB_EXPORT` (the build script collects
+  them by regex, so a new export needs no list edit). One `Instance` = `SynthEngine` + `Model` + the eight
+  `Wavetable`s + the parameter array + 512-frame output buffers. Parameters are written straight into that array
+  (`eb_params`) and applied once per block (`eb_apply_params`); `eb_settle` for jumps.
+- `build-web.ps1` uses `em++` (not `emcc`: the C++ runtime), `-O3 -std=c++17 -fno-exceptions -fno-rtti
+  -s STANDALONE_WASM=1 --no-entry -s ALLOW_MEMORY_GROWTH=1`. Emscripten lives in `%LOCALAPPDATA%\EightBallVST\emsdk`
+  (or `EMSDK`); `-SkipWasm` reuses the last `.wasm`. The page inlines the wasm as base64 (`EIGHTBALL_WASM_B64`),
+  the factory JSON (`FACTORY_JSON`) and `web-host.js` before `engine-juce.js`, the CSS, the icon and a banner;
+  it writes `web/index.html` and the GitHub Pages copy `docs/index.html`.
+- `web-host.js`: two instances (worklet = sound, main thread = baking wavetables and the `file://` fallback through
+  a ScriptProcessor); the worklet's processor source is assembled from `makeEngine`'s and `wasmImports`'s source
+  text; factory presets are resolved in JS exactly as `PresetManager` does (template chain, `modDst`, model
+  blocks); user presets in localStorage (`eightball.userPresets.v1`) or a linked folder (File System Access,
+  handle in IndexedDB `eightball/kv/presetFolder`); MIDI learn, tempo and the MIDI input choice in localStorage
+  (`eightball.*`). `emitEvent` is synchronous so pickers keep the user activation. `window.__eightBallWeb` is the
+  test hook (`render`, `loadFactory`, `factoryCount`, `ready`).
+- The web page is tested by `tests/run-web-tests.ps1` (`tests/web-tests.js` appended to the built page) in
+  headless Edge; it renders through the main-thread instance because headless Edge has no audio output.
+
 ## 9. Tests
 
 | Command | What |
@@ -214,6 +233,7 @@ parity test: the browser runs the same compiled code as the plugin.
 | `--render "<Category/Name>" out.wav [seconds] [note]` | renders a preset to a WAV, for listening without a DAW |
 | `--host-check "<path to .vst3>"` | loads the built VST3 like a DAW: scan, parameters, sound, automation, state round trip |
 | `tests\check-params.ps1` | params.js == ParamTable.h |
+| `tests\run-web-tests.ps1 [-Build]` | the web build in headless Edge: the real bridge and the WebAssembly engine under the UI (presets resolved, five presets rendered through the wasm, A/B, browser presets) + `screenshots/web.png` |
 | `tests\run-ui-tests.ps1 [-Page ops|wave|matrix|filters|art|fx|presets]` | the plugin UI in headless Edge with a stand-in bridge: no script errors, controls for every parameter, drag / double-click / layouts / quick ADSR / keyboard / right-click menu / tooltip / preset browser, the filter panels and routing, the envelope editor (add / drag / sustain / shapes), LFO shapes, the mod matrix, the FX chain reorder, the EQ curve, the GR meter, the flow diagram, ANIMATE, cell glow and scopes from stats, the wave editor (open, paint a partial, Custom, drawn mode, conversion, close); also saves a screenshot (`wave` = the OPERATORS page with the editor open) |
 
 **Eight Ball:** every on/off switch has a bypass test that renders with the feature off and compares with the

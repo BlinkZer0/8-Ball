@@ -1,16 +1,16 @@
-# Eight Ball: v0.5 (milestone 5 of 6)
+# Eight Ball: v1.0 (milestone 6 of 6)
 
 Eight Ball is an 8-operator FM synthesizer: harmonic-editor wavetable operators, an 8×8 phase-modulation grid
 plus an 8×8 ring-modulation grid, three multimode filters, freeform envelopes, four LFOs, a mod matrix, an FX
-chain and 64 presets, in a VST3 plugin, a Standalone app and (last) a browser build that runs the same DSP core
-as WebAssembly. It is the fifth instrument in the family after
+chain and 1044 presets, in a VST3 plugin, a Standalone app and a browser build that runs the same DSP core as
+WebAssembly. It is the fifth instrument in the family after
 [E-Piano](https://github.com/BlinkZer0/E-PianoVST), Brass Knuckles, No Strings and The Ham, and is built the
 same way.
 
 | Build | Where | Status |
 |---|---|---|
 | **VST3 plugin** + Standalone | [`vst/`](vst/README.md) | milestone 5: the full synth (8 operators with the wave editor, the matrix, filters, envelopes, LFOs, mod matrix, FX chain, animated matrix), 1044 level-matched factory presets built on 8-operator architectures, A/B compare, preset search; all automated checks pass |
-| **Web build** | `web/index.html` | milestone 6 |
+| **Web build** | [`web/index.html`](web/index.html), live at **https://blinkzer0.github.io/8-Ball/** | milestone 6: the same UI and the same 1044 presets on the same engine, compiled to WebAssembly and running in an AudioWorklet; Web MIDI, a tempo box, presets in the browser or in a linked folder on disk; 28 headless checks pass |
 
 The plan, the milestones and the measured results are in [docs/PLAN.md](docs/PLAN.md). The house rules are in
 [docs/CONVENTIONS.md](docs/CONVENTIONS.md).
@@ -31,7 +31,7 @@ The plan, the milestones and the measured results are in [docs/PLAN.md](docs/PLA
 
 (made by `vst\tests\run-ui-tests.ps1` from the real UI with a stand-in bridge)
 
-## What it does so far (milestones 1 to 5)
+## What it does (milestones 1 to 6)
 
 **The 8 operators**
 - Each operator plays a **band-limited, mipmapped wavetable** baked from a set of partials (level and phase each)
@@ -140,9 +140,23 @@ The plan, the milestones and the measured results are in [docs/PLAN.md](docs/PLA
 - A category browser (PRESETS page), ‹ › arrows, INIT, SAVE (replaces the current user preset), SAVE AS, LOAD,
   FOLDER; `*` after the name when you've changed something.
 - `.ebpreset` files (plain JSON: every parameter plus the waves, envelopes and LFO shapes) in
-  `Documents\Eight Ball\Presets`, shared by the plugin, the Standalone and (later) the web build; subfolders are
-  categories; new files show up on their own.
+  `Documents\Eight Ball\Presets`, shared by the plugin, the Standalone and the web build (FOLDER links it);
+  subfolders are categories; new files show up on their own.
 - The host project saves every setting, the model and the MIDI-learn map.
+
+**The web build** (`web/index.html`, one file, no install)
+- The engine is **the same C++ compiled to WebAssembly** (Emscripten) and runs in an **AudioWorklet**, so it
+  sounds like the plugin, presets included. Opened straight from disk (`file://`) the browser refuses worklet
+  modules and it falls back to a ScriptProcessor on the main thread; `start.bat` serves it properly on
+  `http://localhost:8080`.
+- **Web MIDI** (Chrome / Edge): every input or one of them (the MIDI IN picker in the header), with the same MIDI
+  learn as the plugin (right-click a knob); the map is remembered by the browser.
+- **BPM** box for the synced LFOs, delays and risers (a DAW's tempo in the plugin).
+- Presets: the factory library, plus your own **in the browser** (localStorage) or, with FOLDER, in a **linked
+  folder on disk** (File System Access API): link `Documents\Eight Ball\Presets` and the plugin and the page share
+  the same `.ebpreset` files. LOAD opens any preset file.
+- A/B, the wave editor, the envelope editor, the animated matrix and the scopes all work; the first click on the
+  page starts the audio (browsers require a gesture).
 
 ## VST3 plugin and Standalone (`vst/`)
 
@@ -185,8 +199,10 @@ oversampling; LFOs + mod matrix: rate, sync, delay, every shape, bypass of the L
 depth, per-voice sources, global destinations, clicks; the FX chain: every unit's bypass and mix 0 bit-identical,
 what each unit does, delay timing and sync, reverb tail and decay, EQ bands, compression and the limiter ceiling,
 the order, click-free switching; every factory preset through a full note), `check-params.ps1` (492 parameters
-match between C++ and JS), `run-ui-tests.ps1` (69 UI checks per page, including the wave editor, A/B and the matrix
-animation), `--host-check` (the built VST3 loaded like a DAW: parameters, sound, automation, state round trip).
+match between C++ and JS), `run-ui-tests.ps1` (76 UI checks per page, including the wave editor, A/B and the matrix
+animation), `--host-check` (the built VST3 loaded like a DAW: parameters, sound, automation, state round trip),
+`run-web-tests.ps1` (the web build in headless Edge: the bridge, the WebAssembly engine rendering Init, a piano, a
+wobble, a kick and a chip lead, 1044 presets in the browser, A/B, save / search / delete of a browser preset).
 
 **Still to confirm by hand:** everything in Minihost Modular and FL Studio: sound, the UI, MIDI learn, the
 right-click host menu, project save / reopen, the envelope and wave editors, the LFOs, the FX and the animated
@@ -199,14 +215,15 @@ matrix by eye and ear.
 - `start.bat -Ui` serves `vst/ui` in a browser as a UI preview (no audio).
 - `EightBallTests --render "Basses/FM Punch Bass" out.wav 3 48` renders a preset to a WAV to hear DSP changes
   without a DAW. `--bench`, `--loudness`, `--host-check` as above.
-- Milestone 6 adds the browser build with the same DSP core, which is the "hear DSP changes without recompiling the
-  VST" path.
+- `vst\webhost\build-web.ps1` rebuilds the web page (Emscripten in `%LOCALAPPDATA%\EightBallVST\emsdk`, see the
+  script header; `-SkipWasm` reuses the last `.wasm` when only the UI changed), then `start.bat` serves it. That
+  is the "hear DSP changes without a DAW" path: the page runs the same `SynthEngine.h`.
 
 ## Repository layout
 
 ```
-web/index.html            web build (milestone 6)
-docs/                     PLAN.md, CONVENTIONS.md
+web/index.html            the web build (GENERATED by vst/webhost/build-web.ps1; docs/index.html is the GitHub Pages copy)
+docs/                     PLAN.md, CONVENTIONS.md, index.html
 start.bat, serve.ps1      local server: the web build, or -Ui for the UI preview
-vst/                      VST3 plugin + Standalone (JUCE 8): Source/, ui/, presets/, tests/
+vst/                      VST3 plugin + Standalone (JUCE 8): Source/, ui/, presets/, tests/, webhost/ (the WebAssembly build)
 ```

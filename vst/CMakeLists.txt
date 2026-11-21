@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.22)
 
-project(EightBallVST VERSION 0.1.0 LANGUAGES C CXX)
+project(EightBallVST VERSION 1.0.0 LANGUAGES C CXX)
 
 # Link the MSVC runtime statically so Eight Ball.exe and Eight Ball.vst3 run on PCs
 # without the Visual C++ Redistributable installed.

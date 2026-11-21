@@ -1,9 +1,9 @@
 # Eight Ball: build plan
 
-Status (2026-11-20): **milestone 5 built**: the full synth from milestones 1-4 plus 1044 level-matched factory
-presets generated from 8-operator recipes (`presets/make_presets.py`), a per-preset level trim parameter, A/B
-compare, preset search, an ON button per operator. All automated checks pass; waiting for hand-testing in Minihost
-Modular.
+Status (2026-11-20): **all six milestones built, v1.0**: the full synth (milestones 1-4), 1044 level-matched
+factory presets from 8-operator recipes with A/B compare and search (5), and the web build (6): the engine
+compiled to WebAssembly under the same UI, at https://blinkzer0.github.io/8-Ball/ . All automated checks pass;
+milestones 2-6 are still waiting for hand-testing by ear.
 
 The brief's milestones, each ending with a stop for hand-testing:
 
@@ -14,7 +14,7 @@ The brief's milestones, each ending with a stop for hand-testing:
 | 3 | FX tab | Distortion, Chorus, Phaser, Delay, Reverb, EQ, Compressor / Limiter with drag-to-reorder | **done** |
 | 4 | Full UI + animated matrix | the harmonic editor and drawn shapes, glowing cells, per-operator scopes, signal-flow lines, Animate toggle | **done** |
 | 5 | Presets | 1044 factory presets (the brief said 64; the user then asked for 200, then about 1000, built on 8-operator architectures that show the matrix off), level-matched, A/B compare | **done** |
-| 6 | HTML build | the DSP core compiled to WebAssembly, Web Audio + Web MIDI, the same UI and presets | |
+| 6 | HTML build | the DSP core compiled to WebAssembly, Web Audio + Web MIDI, the same UI and presets | **done** |
 
 ## Milestone 1 notes
 
@@ -254,3 +254,47 @@ overwrites the other slot. Not part of the project state. The header shows A / B
   Drums on C3; FX & Risers: Riser 2 Bars / 4 Bars with the transport running (they are in beats).
 - A/B: load Wob 1/4 Classic, press B (a copy), load Growl Talk 1/8, press A / B to compare, COPY to overwrite.
 - TRIM: the preset's own gain; it saves into user presets.
+
+## Milestone 6 notes
+
+**No JavaScript twin.** `vst/webhost/wasm-engine.cpp` is a flat C API (`eb_create`, `eb_params`, `eb_render`,
+`eb_note_on` …, 40 exports) over `SynthEngine.h` + `dsp/*.h`, the same files the plugin compiles. `build-web.ps1`
+runs `em++ -O3 -std=c++17 -fno-exceptions -fno-rtti -s STANDALONE_WASM=1 --no-entry` (Emscripten in
+`%LOCALAPPDATA%\EightBallVST\emsdk`; `em++`, not `emcc`: the C++ runtime has to be linked) and gets a 162 KB
+`.wasm` whose only imports are four WASI stubs (`fd_write` and friends, never called) and the memory-growth
+notification; `web-host.js` satisfies them with no-ops. The page inlines the wasm as base64, the factory JSON and
+the UI, as E-Piano does: `web/index.html` is 4.7 MB, one file, and `docs/index.html` is the GitHub Pages copy.
+
+**Two engine instances.** The AudioWorklet owns the one that makes sound; the module (`WebAssembly.Module`) is
+compiled once on the main thread and passed in through `processorOptions`, and the worklet's processor source is
+built from `makeEngine`'s and `wasmImports`'s own source text so there is one wrapper for both sides. The main
+thread keeps a second instance that bakes wavetables (`eb_bake_wave`, about 2 ms) and posts the finished table
+(8 × 2049 floats) to the worklet (`eb_set_table`), so a wave drag never stalls the audio thread, the same split
+as the plugin's ModelStore. Opened from disk Chrome and Edge refuse worklet modules on `file://`; the host then
+runs that main-thread instance through a ScriptProcessor (1024-frame buffers rendered in 128-frame chunks). The
+status bar says which (`Web · AudioWorklet · 48.0 kHz · ~10 ms`).
+
+**The bridge.** `web-host.js` handles every event in `PluginEditor.h` the same way the C++ does: factory presets
+are resolved in JS (defaults ← template chain ← params, `modDst` by id through `MOD_DEST_IDS`, model blocks
+merged like `modelDataFromJson`), user presets live in localStorage or in a linked folder (File System Access,
+remembered in IndexedDB, re-scanned every 2 s like the plugin's folder watcher, `.ebpreset` files identical to
+the VST's), MIDI learn maps CC → parameter in JS and is remembered, A/B is the same snapshot swap, stats come
+from the worklet at 30 Hz and scopes at 20 Hz while ANIMATE is on. `emitEvent` stays synchronous so the file and
+folder pickers keep the click's user activation.
+
+**Headless check.** `tests/run-web-tests.ps1` loads the built page in headless Edge with `tests/web-tests.js`
+appended; the page exposes `window.__eightBallWeb` (`render(note, frames)` on the main-thread instance,
+`loadFactory(i)`) so the test can render Init, Grand Piano, Wob 1/4 Sine LP, Kick 808 Deep and Chip Lead through
+the real wasm and check RMS / peak / finiteness, as well as the preset browser, A/B and a browser preset's save,
+search and delete. 28 checks.
+
+**Version 1.0.** CMake project 1.0.0, the header reads v1.0, `package.ps1` names the zip after it.
+
+**What to try in a browser** (milestone 6):
+- `start.bat`, then http://localhost:8080 (Chrome or Edge for MIDI). Click once: the status bar should read
+  `Web · AudioWorklet`. Play the keys and the A–' row; plug in a controller: the MIDI IN picker lists it.
+- Step through the presets; the wobbles follow the BPM box. Open the wave editor and drag partials while holding a
+  note: no dropouts. ANIMATE on the MATRIX page.
+- FOLDER → pick `Documents\Eight Ball\Presets`: the plugin's user presets appear; SAVE AS writes a file the
+  plugin sees. Reload the page: the folder reconnects after one click on FOLDER (the browser asks again).
+- Open `web\index.html` straight from Explorer: it still plays (ScriptProcessor, more latency).
