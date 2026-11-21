@@ -116,11 +116,12 @@
     svg.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, clientX: kr.left + kr.width / 2, clientY: kr.top + kr.height * 0.8, pointerId: 2, button: 0 }));
     svg.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, clientX: kr.left + kr.width / 2, clientY: kr.top + kr.height * 0.8, pointerId: 2, button: 0 }));
     const notes = sent.slice(n2);
-    check(notes.some(s => s.ev === 'noteOn' && s.data.note === 48 && s.data.vel > 90), 'key click sends noteOn C3 with a high velocity near the bottom');
-    check(notes.some(s => s.ev === 'noteOff' && s.data.note === 48), 'key release sends noteOff');
+    check(notes.some(s => s.ev === 'noteOn' && s.data.note === 36 && s.data.vel > 90), 'key click sends noteOn C2 with a high velocity near the bottom');
+    check(notes.some(s => s.ev === 'noteOff' && s.data.note === 36), 'key release sends noteOff');
+    check($$('.piano-svg .wkey').length >= 28 && $$('.piano-svg .wkey').length <= 36, `the keyboard fills the keybed (${$$('.piano-svg .wkey').length} white keys)`);
 
     // notes from the host light the key
-    (listeners.notes || []).forEach(f => f({ on: [50], off: [] }));
+    (listeners.notes || []).forEach(f => f({ on: [38], off: [] }));
     check($('[data-idx="2"]').classList.contains('down'), 'host note lights the key');
 
     // right-click opens the custom menu with MIDI learn; picking it sends midiLearn

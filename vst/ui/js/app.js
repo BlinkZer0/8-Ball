@@ -671,7 +671,9 @@
     ledTimer = setTimeout(() => midiLed.classList.remove('on'), 90);
   }
 
-  const piano = new Piano($('#piano'), { numKeys: 24, baseNote: 48, onNoteOn: (n, v) => noteOn(n, v), onNoteOff: (n) => noteOff(n) });
+  // the keyboard takes the whole width the keybed leaves it (about four octaves), starting at C2
+  const piano = new Piano($('#piano'), { numKeys: 24, baseNote: 36, onNoteOn: (n, v) => noteOn(n, v), onNoteOff: (n) => noteOff(n) });
+  piano.fit();
 
   function noteOn(note, vel) { engine.noteOn(note, vel); piano.setNote(note, true); }
   function noteOff(note) { engine.noteOff(note); piano.setNote(note, false); }
@@ -686,10 +688,10 @@
   });
 
   function setOctave(base) {
-    base = clamp(base, 12, 96);
+    base = clamp(base, 12, piano.maxBase);
     for (const [k, n] of heldKeys) { noteOff(n); heldKeys.delete(k); }
     piano.setBase(base);
-    $('#octave-readout').textContent = `${midiNoteName(Math.max(base, KEY_LOWEST))}–${midiNoteName(Math.min(base + 23, KEY_HIGHEST))}`;
+    $('#octave-readout').textContent = `${midiNoteName(Math.max(base, KEY_LOWEST))}–${midiNoteName(Math.min(base + piano.numKeys - 1, KEY_HIGHEST))}`;
   }
   $('#oct-down').addEventListener('click', () => setOctave(piano.base - 12));
   $('#oct-up').addEventListener('click', () => setOctave(piano.base + 12));
@@ -803,7 +805,7 @@
   renderBrowser();
   showPage(activePage);
   refresh();
-  setOctave(48);
+  setOctave(36);
   fit();
   if (engine.connected) engine.uiReady();
   else logMidi('Not running inside the plugin — no audio engine connected (UI preview only)');

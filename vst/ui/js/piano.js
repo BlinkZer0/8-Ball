@@ -1,6 +1,8 @@
 // ============================================================================
-//  24-key SVG piano (two octaves of the 88-key range; the octave buttons and
-//  Z / X shift it). Inverted colours: naturals are black, sharps are white.
+//  SVG piano: as many keys as the keybed is wide (fit(): 24 px per white key at
+//  the design width, about four octaves), a window on the 88-key range that
+//  the octave buttons and Z / X shift. Inverted colours: naturals are black,
+//  sharps are white.
 //  Click/touch to play, drag for glissando. Velocity = how far down the key
 //  you click (lower = harder). Lights up every sounding note (host MIDI too).
 // ============================================================================
@@ -21,8 +23,21 @@ class Piano {
     this.active = new Set();     // sounding MIDI notes (from any source)
     this.pointers = new Map();   // pointerId -> note
     this.keys = [];
+    this.container = container;
     this.build(container);
   }
+
+  // Rebuild with as many keys as fit the container: whole white keys of `whitePx` design pixels,
+  // from a C to a B or E so the range ends cleanly (the base note stays a C).
+  fit(whitePx = 24) {
+    const whites = clamp(Math.floor(this.container.clientWidth / whitePx), 14, 52);
+    let n = 0, w = 0;
+    while (w < whites) { if (!BLACK_PCS.has(n % 12)) w++; n++; }   // the last key is the last white
+    this.numKeys = n;
+    this.build(this.container);
+    return n;
+  }
+  get maxBase() { return Math.max(12, Math.floor((KEY_HIGHEST + 1 - this.numKeys) / 12) * 12); }
 
   build(container) {
     const WW = 40, WH = 200, BW = 24, BH = 122, TOP = 10;

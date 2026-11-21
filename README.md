@@ -115,7 +115,8 @@ The plan, the milestones and the measured results are in [docs/PLAN.md](docs/PLA
   all-notes-off / all-sound-off.
 - **MIDI learn: right-click any knob**, then move a controller. The menu also forgets a CC, resets the knob, and
   opens the host's own automation menu (FL Studio's *Create automation clip*). Learned CCs are saved in the project.
-- 24-key on-screen keyboard (two octaves of the 88-key range, octave buttons or Z / X), lit by incoming MIDI;
+- An on-screen keyboard that fills the width of the keybed (about four and a half octaves, C2 to F6, of the
+  88-key range; octave buttons or Z / X shift it), lit by incoming MIDI;
   computer keys `A W S E D F T G Y H U J K O L P ; '`; a mod wheel; PANIC.
 - Hover any control for a tooltip with its name and value.
 

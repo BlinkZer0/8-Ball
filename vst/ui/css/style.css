@@ -579,7 +579,7 @@ body.web .web-only { display: flex !important; }
 .oct-readout { font-family: var(--mono); font-size: 11px; color: var(--accent); }
 .kbd-hint { font-size: 9px; color: var(--faint); text-align: center; line-height: 1.4; }
 
-.piano { flex: 1; min-width: 0; max-width: 700px; }
+.piano { flex: 1; min-width: 0; }
 .piano-svg { display: block; width: 100%; height: auto; max-height: 150px; touch-action: none; cursor: pointer; }
 .felt { fill: #4e1620; }
 /* Inverted keyboard: naturals black, sharps white */
